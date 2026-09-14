@@ -1,0 +1,1215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1.0">
+    <meta name="description" content="Interactive map of ForgeNow graduate talent across the United States.">
+    <meta name="robots" content="noindex,nofollow">
+    <meta name="referrer" content="no-referrer">
+    <meta name="color-scheme" content="light">
+    <meta name="theme-color" content="#F4F1EB">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' https://cdnjs.cloudflare.com; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src data:; connect-src https://cdn.jsdelivr.net; object-src 'none'; base-uri 'none'; form-action 'none'">
+    <title>ForgeNow — Graduate Talent Network</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800&amp;family=DM+Sans:wght@300;400;500&amp;display=swap" rel="stylesheet">
+    <style>
+        :root{
+            --bg:#F4F1EB;--surface:#FFF;--ink:#1A1A18;--ink-muted:#6B6861;--ink-faint:#B5B2A9;
+            --border:#E0DDD6;
+            --hvac:#C8390A;--hvac-bg:#FDF0EC;
+            --elec:#0B6E5A;--elec-bg:#E5F4F1;
+            --plumb:#1D5FA8;--plumb-bg:#E8F0FB;
+            --fac:#7A4D0F;--fac-bg:#F7EFE2;
+        }
+        *{box-sizing:border-box;margin:0;padding:0}
+        body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--ink);height:100vh;height:100dvh;display:flex;flex-direction:column;overflow:hidden}
+        .sr-only{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}
+
+        /* HEADER — logo + filters only */
+        .hdr{background:var(--surface);border-bottom:1px solid var(--border);padding:0 24px;min-height:58px;display:flex;align-items:center;gap:20px;flex-shrink:0;z-index:10}
+        .logo{height:30px;width:auto}
+        .hdr-sep{width:1px;height:22px;background:var(--border)}
+        .hdr-sub{font-size:12.5px;color:var(--ink-muted)}
+        .filters{display:flex;gap:6px;margin-left:auto}
+        .chip{min-height:36px;padding:7px 13px;border-radius:99px;border:1px solid var(--border);font:500 12px 'DM Sans',sans-serif;color:var(--ink-muted);cursor:pointer;transition:all .15s;background:transparent;white-space:nowrap}
+        .chip:hover{border-color:var(--ink);color:var(--ink)}
+        .chip.on-all{background:var(--ink);color:#fff;border-color:var(--ink)}
+        .chip.on-HVAC{background:var(--hvac);color:#fff;border-color:var(--hvac)}
+        .chip.on-ELECTRICAL{background:var(--elec);color:#fff;border-color:var(--elec)}
+        .chip.on-PLUMBING{background:var(--plumb);color:#fff;border-color:var(--plumb)}
+        .chip.on-FACILITIES{background:var(--fac);color:#fff;border-color:var(--fac)}
+
+        /* MAP — full width */
+        .map-wrap{flex:1;position:relative;overflow:hidden}
+        #map-svg{width:100%;height:100%;display:block;outline:none;touch-action:none}
+        #map-svg:focus-visible{outline:3px solid var(--plumb);outline-offset:-3px}
+        .state-path{fill:#EBE7DF;stroke:#D8D4CC;stroke-width:.7}
+        .marker{cursor:pointer;transition:opacity .12s}
+        .marker:hover,.marker:focus{opacity:1}
+        .marker .active-ring{display:none;fill:none;stroke:var(--ink);stroke-width:2.5;vector-effect:non-scaling-stroke;pointer-events:none}
+        .marker.active .active-ring{display:block}
+
+        /* TOOLTIP */
+        .tt{position:absolute;pointer-events:none;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:11px 14px;box-shadow:0 6px 24px rgba(0,0,0,.12);min-width:160px;max-width:220px;opacity:0;transform:translateY(4px);transition:opacity .12s,transform .12s;z-index:300}
+        .tt.show{opacity:1;transform:translateY(0)}
+        .tt-loc{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:15px;color:var(--ink);margin-bottom:6px;line-height:1.2}
+        .tt-badge{display:inline-block;font-size:10px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;padding:3px 8px;border-radius:5px}
+        .b-HVAC{background:var(--hvac-bg);color:var(--hvac)}
+        .b-ELECTRICAL{background:var(--elec-bg);color:var(--elec)}
+        .b-PLUMBING{background:var(--plumb-bg);color:var(--plumb)}
+        .b-FACILITIES{background:var(--fac-bg);color:var(--fac)}
+
+        /* LEGEND */
+        .legend{position:absolute;bottom:18px;right:18px;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px 15px;box-shadow:0 2px 10px rgba(0,0,0,.07)}
+        .leg-t{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--ink-muted);margin-bottom:8px}
+        .leg-r{display:flex;align-items:center;gap:8px;margin-bottom:5px;font-size:12px;color:var(--ink-muted)}
+        .leg-r:last-child{margin-bottom:0}
+        .leg-d{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+
+        /* ZOOM */
+        .ctrls{position:absolute;bottom:18px;left:18px;display:flex;flex-direction:column;gap:4px}
+        .cb{width:44px;height:44px;background:var(--surface);border:1px solid var(--border);border-radius:8px;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--ink-muted);box-shadow:0 2px 8px rgba(0,0,0,.07);transition:all .15s;font-family:monospace}
+        .cb:hover,.cb:focus-visible{background:var(--ink);color:#fff;border-color:var(--ink);outline:none}
+        @media(max-width:700px){
+            .hdr{padding:8px 12px 0;display:grid;grid-template-columns:auto 1px 1fr;grid-template-rows:34px 56px;gap:0 12px}
+            .hdr-sep{height:20px}.hdr-sub{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+            .filters{grid-column:1/-1;width:calc(100% + 24px);margin-left:-12px;padding:4px 12px 8px;overflow-x:auto;scrollbar-width:none}
+            .filters::-webkit-scrollbar{display:none}.chip{min-height:44px}.legend{bottom:12px;right:12px}.ctrls{bottom:12px;left:12px}
+            .cb{width:44px;height:44px}
+        }
+        @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}.chip,.cb,.tt,.marker{transition:none!important}}
+    </style>
+</head>
+<body>
+
+<!-- Divi Code Module embed (replace MAP-URL):
+<iframe src="MAP-URL" title="ForgeNow Graduate Talent Network map" loading="lazy" sandbox="allow-scripts" style="display:block;width:100%;height:min(760px,80vh);min-height:520px;border:0" referrerpolicy="no-referrer"></iframe>
+-->
+
+<div class="hdr">
+    <img class="logo" src="data:image/jpeg;base64,/9j/4AAQSkZJRgABAgAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/2wBDAQkJCQwLDBgNDRgyIRwhMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjL/wAARCAEaA6wDASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwD3+iiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigArzvRPiTBN441XwxqzRwzRXbx2Uw+VZADgI3o3oeh6devolfIvj8lfiFrxB5F7IQR1HNAH11RXj/wALPiiuqLDoGvTAX4G22uXPE4HRWP8Af9D3+vX2CgBCMjGcV4d498TfETwTqeDqaT6bMx+z3P2SP67W+Xhh+RHI7ge5VQ1bSbHXNMn07UYFntpl2sjfoQexB5BHSgD5t/4XL43/AOgnF/4Cx/8AxNH/AAuXxv8A9BOL/wABY/8A4mqPj7wDe+CtTwd0+mTMfs9zj8drY6MB+BHI7gcfQPQ77/hcvjf/AKCcX/gLH/8AE0f8Ll8b/wDQTi/8BY//AImuBooHZHff8Ll8b/8AQTi/8BY//iaP+Fy+N/8AoJxf+Asf/wATXA0UBZHff8Ll8b/9BOL/AMBY/wD4mj/hcvjf/oJxf+Asf/xNcDRQFkd9/wALl8b/APQTi/8AAWP/AOJo/wCFy+N/+gnF/wCAsf8A8TXA0UBZHff8Ll8b/wDQTi/8BY//AImj/hcvjf8A6CcX/gLH/wDE1wNFAWR33/C5fG//AEE4v/AWP/4mj/hcvjf/AKCcX/gLH/8AE1wNFAWR33/C5fG//QTi/wDAWP8A+Jo/4XL43/6CcX/gLH/8TXA0UBZHff8AC5fG/wD0E4v/AAFj/wDiasWHxf8AGlxqNrBJqURSSZUbFtGMgkA/w+lec1b0n/kMWP8A18R/+hCgVj7UooooEFFFFABRRRQAUUUUAFFFFABRRRQAUUUUAFFFFABRRRQAUUUUAFFFFABRRRQAUUUUAFFFFABRRRQAUUUUAFFFFABRRRQAUUUUAFFFFABRRRQAUUUUAFFFFABRRRQAUUUUAFFFFABRRRQAUUUUAFFFFABRRRQAUUUUAFFFFABRRRQAUUUUAFFFFABRRRQAUUUUAFFFFABRRRQAUUUUAFFF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0Hqep79gLngbwJp3grTfLhAmv5QPtF0wwXP90eijsO/U5NddQJsKKKKBBRRRQAUUUUAFFFFABRRRQAUUUUAFFFFABRRRQAUUUUAFFFFABRRRQAUUUUAFFFFABRRRQAUUUUAFFFFABRRRQAUUUUAFFFFABRRRQAUUUUAFFFFABRRRQAUUUUAFFFFABRRRQAUUUUAFFFFABRRRQAUUUUAFFFFABRRRQAUUUUAFFFFABRRRQAUUUUAFFFFABRRRQAUUUUAFFFFABRRRQAUUUUAFFFFABRRRQAUUUUAFFFFABRRRQAUUUUAFFFFABRRRQAUUUUAFFFFABRRRQAUUUUAFFFFABRRRQAVla9oGneJdLl07U7cTQSDg9GRuzKexHr+ByCRWrRQB8yaj8INftfF8WjWyia1ny8V6RhBGCMlvQjIyO5IxnPHvHhHwfpng7SxZ2CbpWwZ7lx88rep9AOwHA9zkno6KACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooA/9k=" alt="ForgeNow">
+    <div class="hdr-sep"></div>
+    <span class="hdr-sub">Graduate Talent Network</span>
+    <div class="filters" aria-label="Filter talent by trade">
+        <button class="chip on-all" aria-pressed="true" onclick="setFilter('all',this)">All Trades</button>
+        <button class="chip" data-f="HVAC" aria-pressed="false" onclick="setFilter('HVAC',this)">HVAC</button>
+        <button class="chip" data-f="ELECTRICAL" aria-pressed="false" onclick="setFilter('ELECTRICAL',this)">Electrical</button>
+        <button class="chip" data-f="PLUMBING" aria-pressed="false" onclick="setFilter('PLUMBING',this)">Plumbing</button>
+    </div>
+</div>
+
+<div class="map-wrap" id="map-wrap">
+    <p class="sr-only" id="map-help">Use arrow keys to move between visible markers, Enter or Space for details, and Escape to close details.</p>
+    <svg id="map-svg" role="region" tabindex="0" aria-label="United States graduate talent map" aria-describedby="map-help"></svg>
+    <div class="tt" id="tt" aria-hidden="true"></div>
+    <div class="sr-only" id="map-status" role="status" aria-live="polite" aria-atomic="true">Loading map.</div>
+
+    <div class="legend">
+        <div class="leg-t">Trade</div>
+        <div class="leg-r"><span class="leg-d" style="background:var(--hvac)"></span>HVAC</div>
+        <div class="leg-r"><span class="leg-d" style="background:var(--elec)"></span>Electrical</div>
+        <div class="leg-r"><span class="leg-d" style="background:var(--plumb)"></span>Plumbing</div>
+    </div>
+
+    <div class="ctrls">
+        <button class="cb" aria-label="Zoom in" title="Zoom in" onclick="zIn()">+</button>
+        <button class="cb" aria-label="Zoom out" title="Zoom out" onclick="zOut()">−</button>
+        <button class="cb" aria-label="Reset map view" title="Reset map view" onclick="zReset()">⊙</button>
+    </div>
+</div>
+
+<script>
+    const DOTS=[
+        {"trade":"HVAC","location":"Philadelphia, PA","latitude":39.952,"longitude":-75.163},
+        {"trade":"HVAC","location":"Madison, FL","latitude":30.469,"longitude":-83.413},
+        {"trade":"HVAC","location":"Colorado Springs, CO","latitude":38.833,"longitude":-104.825},
+        {"trade":"HVAC","location":"El Paso, TX","latitude":31.723,"longitude":-106.339},
+        {"trade":"HVAC","location":"Largo, FL","latitude":27.909,"longitude":-82.787},
+        {"trade":"HVAC","location":"Dallas, TX","latitude":32.886,"longitude":-97.087},
+        {"trade":"HVAC","location":"Washington, DC","latitude":38.895,"longitude":-77.036},
+        {"trade":"HVAC","location":"Charlotte, NC","latitude":35.337,"longitude":-80.843},
+        {"trade":"HVAC","location":"San Diego, CA","latitude":32.717,"longitude":-117.162},
+        {"trade":"HVAC","location":"Dallas, TX","latitude":32.751,"longitude":-96.944},
+        {"trade":"HVAC","location":"El Paso, TX","latitude":31.91,"longitude":-106.547},
+        {"trade":"HVAC","location":"Jeffersonville, IN","latitude":38.459,"longitude":-85.713},
+        {"trade":"HVAC","location":"Dallas, TX","latitude":33.0,"longitude":-97.059},
+        {"trade":"HVAC","location":"Dallas, TX","latitude":32.851,"longitude":-97.178},
+        {"trade":"HVAC","location":"Mt. Pocono, PA","latitude":40.403,"longitude":-75.658},
+        {"trade":"HVAC","location":"Austin, TX","latitude":30.466,"longitude":-97.719},
+        {"trade":"HVAC","location":"Colorado Springs, CO","latitude":39.208,"longitude":-104.88},
+        {"trade":"HVAC","location":"Port Wentworth, GA","latitude":32.149,"longitude":-81.163},
+        {"trade":"HVAC","location":"Dallas, TX","latitude":32.833,"longitude":-97.211},
+        {"trade":"HVAC","location":"El Paso, TX","latitude":31.938,"longitude":-106.654},
+        {"trade":"HVAC","location":"Colorado Springs, CO","latitude":38.804,"longitude":-105.06},
+        {"trade":"HVAC","location":"Dallas, TX","latitude":33.083,"longitude":-96.774},
+        {"trade":"HVAC","location":"Dallas, TX","latitude":32.954,"longitude":-97.318},
+        {"trade":"HVAC","location":"Fayetteville, NC","latitude":34.859,"longitude":-78.896},
+        {"trade":"HVAC","location":"Memphis, TX","latitude":34.829,"longitude":-100.262},
+        {"trade":"HVAC","location":"Mishawaka, IN","latitude":41.63,"longitude":-86.408},
+        {"trade":"HVAC","location":"Bellingham, WA","latitude":48.674,"longitude":-122.767},
+        {"trade":"HVAC","location":"Dallas, TX","latitude":32.822,"longitude":-97.026},
+        {"trade":"ELECTRICAL","location":"Dallas, TX","latitude":32.77,"longitude":-96.868},
+        {"trade":"ELECTRICAL","location":"Lafayette, LA","latitude":30.042,"longitude":-92.193},
+        {"trade":"ELECTRICAL","location":"Dallas, TX","latitude":32.793,"longitude":-97.098},
+        {"trade":"ELECTRICAL","location":"Raleigh, NC","latitude":35.886,"longitude":-78.728},
+        {"trade":"ELECTRICAL","location":"St. Louis, MO","latitude":38.708,"longitude":-89.947},
+        {"trade":"ELECTRICAL","location":"Dallas, TX","latitude":32.742,"longitude":-96.822},
+        {"trade":"ELECTRICAL","location":"Dallas, TX","latitude":32.93,"longitude":-96.892},
+        {"trade":"ELECTRICAL","location":"Dallas, TX","latitude":32.933,"longitude":-97.095},
+        {"trade":"ELECTRICAL","location":"Dallas, TX","latitude":32.729,"longitude":-97.254},
+        {"trade":"ELECTRICAL","location":"El Paso, TX","latitude":31.64,"longitude":-106.643},
+        {"trade":"ELECTRICAL","location":"Dallas, TX","latitude":32.748,"longitude":-97.215},
+        {"trade":"ELECTRICAL","location":"Dallas, TX","latitude":32.914,"longitude":-96.878},
+        {"trade":"ELECTRICAL","location":"Austin, TX","latitude":30.389,"longitude":-97.532},
+        {"trade":"ELECTRICAL","location":"Dallas, TX","latitude":32.737,"longitude":-96.847},
+        {"trade":"ELECTRICAL","location":"Tulsa, OK","latitude":36.024,"longitude":-96.247},
+        {"trade":"ELECTRICAL","location":"Phoenix, AZ","latitude":33.365,"longitude":-112.019},
+        {"trade":"ELECTRICAL","location":"Bryan, TX","latitude":30.449,"longitude":-96.5},
+        {"trade":"ELECTRICAL","location":"Dallas, TX","latitude":32.85,"longitude":-96.847},
+        {"trade":"ELECTRICAL","location":"Dallas, TX","latitude":32.85,"longitude":-97.092},
+        {"trade":"ELECTRICAL","location":"Berwick, LA","latitude":29.648,"longitude":-91.454},
+        {"trade":"ELECTRICAL","location":"Dallas, TX","latitude":33.042,"longitude":-96.786},
+        {"trade":"ELECTRICAL","location":"Coeur d'Alene, ID","latitude":47.769,"longitude":-116.841},
+        {"trade":"ELECTRICAL","location":"Waco, TX","latitude":31.528,"longitude":-97.263},
+        {"trade":"ELECTRICAL","location":"Dallas, TX","latitude":32.952,"longitude":-96.948},
+        {"trade":"ELECTRICAL","location":"Watertown, NY","latitude":43.894,"longitude":-75.775},
+        {"trade":"ELECTRICAL","location":"Dallas, TX","latitude":32.978,"longitude":-97.209},
+        {"trade":"PLUMBING","location":"San Antonio, TX","latitude":29.554,"longitude":-98.385},
+        {"trade":"PLUMBING","location":"Winston, NC","latitude":36.0,"longitude":-80.362},
+        {"trade":"PLUMBING","location":"Edmond, OK","latitude":35.751,"longitude":-97.732},
+        {"trade":"PLUMBING","location":"Fort Worth, TX","latitude":32.725,"longitude":-97.052},
+        {"trade":"PLUMBING","location":"Aurora, CO","latitude":39.632,"longitude":-104.828},
+        {"trade":"PLUMBING","location":"Arlington, TX","latitude":32.903,"longitude":-96.885},
+        {"trade":"PLUMBING","location":"Dallas, TX","latitude":33.005,"longitude":-97.02},
+        {"trade":"FACILITIES","location":"Greenville, NC","latitude":35.952,"longitude":-78.786},
+        {"trade":"FACILITIES","location":"Wilkes-Barre, PA","latitude":40.958,"longitude":-77.663},
+        {"trade":"FACILITIES","location":"Dallas, TX","latitude":32.953,"longitude":-96.973},
+        {"trade":"FACILITIES","location":"Paducah, KY","latitude":37.194,"longitude":-88.304},
+        {"trade":"FACILITIES","location":"Fort Worth, TX","latitude":32.932,"longitude":-96.748},
+        {"trade":"HVAC","location":"College Station, TX","latitude":30.697,"longitude":-96.366},
+        {"trade":"HVAC","location":"Killeen, TX","latitude":31.072,"longitude":-97.498},
+        {"trade":"HVAC","location":"Spring Hope, NC","latitude":36.333,"longitude":-78.356},
+        {"trade":"HVAC","location":"Santa Clara, CA","latitude":37.428,"longitude":-121.671},
+        {"trade":"HVAC","location":"Kansas City, MO","latitude":38.977,"longitude":-94.481},
+        {"trade":"HVAC","location":"Dallas, TX","latitude":32.759,"longitude":-96.956},
+        {"trade":"HVAC","location":"Spring, TX","latitude":29.823,"longitude":-95.224},
+        {"trade":"HVAC","location":"Dallas, TX","latitude":33.037,"longitude":-97.201},
+        {"trade":"HVAC","location":"Dallas, TX","latitude":33.034,"longitude":-97.133},
+        {"trade":"HVAC","location":"Las Vegas, NV","latitude":36.13,"longitude":-115.373},
+        {"trade":"HVAC","location":"Dallas, TX","latitude":32.903,"longitude":-97.339},
+        {"trade":"HVAC","location":"Savannah, GA","latitude":32.004,"longitude":-80.997},
+        {"trade":"HVAC","location":"Dallas, TX","latitude":32.989,"longitude":-97.24},
+        {"trade":"HVAC","location":"Royse City, TX","latitude":33.004,"longitude":-97.074},
+        {"trade":"HVAC","location":"Houston, TX","latitude":29.642,"longitude":-95.221},
+        {"trade":"HVAC","location":"Killeen, TX","latitude":31.216,"longitude":-97.749},
+        {"trade":"HVAC","location":"Dallas, TX","latitude":32.902,"longitude":-96.968},
+        {"trade":"HVAC","location":"San Antonio, TX","latitude":29.483,"longitude":-98.331},
+        {"trade":"HVAC","location":"Phoenix, AZ","latitude":33.558,"longitude":-112.25},
+        {"trade":"HVAC","location":"Dallas, TX","latitude":32.698,"longitude":-97.277},
+        {"trade":"HVAC","location":"San Antonio, TX","latitude":29.353,"longitude":-98.442},
+        {"trade":"HVAC","location":"Dallas, TX","latitude":33.074,"longitude":-97.09},
+        {"trade":"ELECTRICAL","location":"Irving, TX","latitude":32.758,"longitude":-96.916},
+        {"trade":"ELECTRICAL","location":"Pasadena, TX","latitude":29.939,"longitude":-95.317},
+        {"trade":"ELECTRICAL","location":"Dallas, TX","latitude":32.808,"longitude":-96.886},
+        {"trade":"ELECTRICAL","location":"Addison, TX","latitude":33.087,"longitude":-96.864},
+        {"trade":"ELECTRICAL","location":"Colorado Springs, CO","latitude":38.462,"longitude":-104.897},
+        {"trade":"ELECTRICAL","location":"Southern Pines, NC","latitude":35.453,"longitude":-80.469},
+        {"trade":"ELECTRICAL","location":"Dallas, TX","latitude":32.632,"longitude":-96.832},
+        {"trade":"ELECTRICAL","location":"Louisville, MS","latitude":33.46,"longitude":-89.217},
+        {"trade":"ELECTRICAL","location":"Austin, TX","latitude":30.237,"longitude":-97.467},
+        {"trade":"ELECTRICAL","location":"Jonesboro, AR","latitude":35.745,"longitude":-90.406},
+        {"trade":"ELECTRICAL","location":"Houston, TX","latitude":29.669,"longitude":-95.326},
+        {"trade":"ELECTRICAL","location":"Katy, TX","latitude":29.946,"longitude":-95.89},
+        {"trade":"ELECTRICAL","location":"Austin, TX","latitude":30.401,"longitude":-97.478},
+        {"trade":"ELECTRICAL","location":"Fayetteville, NC","latitude":35.042,"longitude":-78.644},
+        {"trade":"ELECTRICAL","location":"Fort Worth, TX","latitude":32.906,"longitude":-97.344},
+        {"trade":"ELECTRICAL","location":"San Angelo, TX","latitude":31.103,"longitude":-100.265},
+        {"trade":"ELECTRICAL","location":"Bend, OR","latitude":43.687,"longitude":-120.572},
+        {"trade":"ELECTRICAL","location":"Dallas, TX","latitude":32.586,"longitude":-96.902},
+        {"trade":"ELECTRICAL","location":"Colorado Springs, CO","latitude":38.642,"longitude":-104.906},
+        {"trade":"ELECTRICAL","location":"Albuquerque, NM","latitude":35.173,"longitude":-106.608},
+        {"trade":"ELECTRICAL","location":"Rochester, MN","latitude":44.125,"longitude":-92.543},
+        {"trade":"ELECTRICAL","location":"San Antonio, TX","latitude":29.463,"longitude":-98.542},
+        {"trade":"ELECTRICAL","location":"Portland, OR","latitude":45.386,"longitude":-122.627},
+        {"trade":"ELECTRICAL","location":"Dallas, TX","latitude":32.599,"longitude":-97.078},
+        {"trade":"ELECTRICAL","location":"San Antonio, TX","latitude":29.367,"longitude":-98.652},
+        {"trade":"ELECTRICAL","location":"Chicago, IL","latitude":41.952,"longitude":-87.855},
+        {"trade":"ELECTRICAL","location":"Buford, GA","latitude":34.128,"longitude":-84.512},
+        {"trade":"ELECTRICAL","location":"Fresno, CA","latitude":36.707,"longitude":-119.607},
+        {"trade":"ELECTRICAL","location":"Harrisburg, PA","latitude":40.117,"longitude":-77.077},
+        {"trade":"ELECTRICAL","location":"Lawton, OK","latitude":34.455,"longitude":-98.337},
+        {"trade":"ELECTRICAL","location":"Bunnlevel, NC","latitude":35.572,"longitude":-80.343},
+        {"trade":"ELECTRICAL","location":"Denton, TX","latitude":33.234,"longitude":-97.009},
+        {"trade":"ELECTRICAL","location":"Dallas, TX","latitude":32.951,"longitude":-96.851},
+        {"trade":"ELECTRICAL","location":"Tulsa, OK","latitude":35.303,"longitude":-97.413},
+        {"trade":"ELECTRICAL","location":"Dallas, TX","latitude":32.98,"longitude":-96.845},
+        {"trade":"ELECTRICAL","location":"El Paso, TX","latitude":31.63,"longitude":-106.698},
+        {"trade":"ELECTRICAL","location":"Ennis, TX","latitude":32.244,"longitude":-96.427},
+        {"trade":"ELECTRICAL","location":"Dallas, TX","latitude":32.757,"longitude":-96.817},
+        {"trade":"ELECTRICAL","location":"Dallas, TX","latitude":32.977,"longitude":-96.971},
+        {"trade":"ELECTRICAL","location":"Tyler, TX","latitude":32.454,"longitude":-95.233},
+        {"trade":"ELECTRICAL","location":"Dallas, TX","latitude":32.826,"longitude":-97.308},
+        {"trade":"ELECTRICAL","location":"Colorado Springs, CO","latitude":39.156,"longitude":-104.475},
+        {"trade":"PLUMBING","location":"Dallas, TX","latitude":32.765,"longitude":-97.232},
+        {"trade":"PLUMBING","location":"Richardson, TX","latitude":32.734,"longitude":-97.042},
+        {"trade":"PLUMBING","location":"Dallas, TX","latitude":33.077,"longitude":-96.902},
+        {"trade":"PLUMBING","location":"Charlotte, NC","latitude":35.035,"longitude":-80.914},
+        {"trade":"PLUMBING","location":"Dallas, TX" ,"latitude":32.963,"longitude":-97.282},
+        {"trade":"PLUMBING","location":"Dallas, TX","latitude":33.008,"longitude":-97.199},
+        {"trade":"PLUMBING","location":"El Paso, TX","latitude":31.748,"longitude":-106.274},
+        {"trade":"PLUMBING","location":"Houston, TX","latitude":29.91,"longitude":-95.622},
+        {"trade":"PLUMBING","location":"Dallas, TX","latitude":33.017,"longitude":-96.815},
+        {"trade":"FACILITIES","location":"Youngstown, OH","latitude":40.806,"longitude":-82.507},
+        {"trade":"FACILITIES","location":"Dallas, TX","latitude":32.839,"longitude":-97.152},
+        {"trade":"FACILITIES","location":"Cincinnati, OH","latitude":39.855,"longitude":-83.186},
+        {"trade":"FACILITIES","location":"Colorado Springs, CO","latitude":38.976,"longitude":-104.693},
+        {"trade":"FACILITIES","location":"Battle Creek, MI","latitude":41.992,"longitude":-84.963},
+        {"trade":"HVAC","location":"Wichita Falls, TX","latitude":33.487,"longitude":-98.393},
+        {"trade":"HVAC","location":"Dallas, TX","latitude":32.629,"longitude":-96.844},
+        {"trade":"HVAC","location":"Dallas, TX","latitude":32.609,"longitude":-96.888},
+        {"trade":"HVAC","location":"Lafayette, LA","latitude":30.263,"longitude":-92.13},
+        {"trade":"HVAC","location":"Murray, KY","latitude":36.544,"longitude":-88.414},
+        {"trade":"HVAC","location":"Dallas, TX","latitude":33.022,"longitude":-97.319},
+        {"trade":"HVAC","location":"Miramar, FL","latitude":25.987,"longitude":-80.232},
+        {"trade":"HVAC","location":"Atascocita, TX","latitude":30.339,"longitude":-95.344},
+        {"trade":"HVAC","location":"Austin, TX","latitude":30.077,"longitude":-97.522},
+        {"trade":"HVAC","location":"Colorado Springs, CO","latitude":38.743,"longitude":-105.291},
+        {"trade":"HVAC","location":"San Antonio, TX","latitude":29.435,"longitude":-98.249},
+        {"trade":"HVAC","location":"Fort Worth, TX","latitude":32.641,"longitude":-97.316},
+        {"trade":"HVAC","location":"Baldwin Park, CA","latitude":34.331,"longitude":-117.664},
+        {"trade":"HVAC","location":"Charlotte, NC","latitude":35.289,"longitude":-81.042},
+        {"trade":"HVAC","location":"Lexington, SC","latitude":33.721,"longitude":-81.231},
+        {"trade":"HVAC","location":"Pueblo West, CO","latitude":38.561,"longitude":-105.229},
+        {"trade":"HVAC","location":"Lake Charles, LA","latitude":30.111,"longitude":-92.97},
+        {"trade":"HVAC","location":"Dallas, TX","latitude":32.762,"longitude":-97.16},
+        {"trade":"HVAC","location":"San Angelo, TX","latitude":31.656,"longitude":-100.587},
+        {"trade":"HVAC","location":"Las Vegas, NV","latitude":36.202,"longitude":-115.182},
+        {"trade":"HVAC","location":"Colorado Springs, CO","latitude":38.582,"longitude":-105.102},
+        {"trade":"HVAC","location":"Houston, TX","latitude":30.081,"longitude":-95.158},
+        {"trade":"HVAC","location":"Duncanville, TX","latitude":33.081,"longitude":-97.296},
+        {"trade":"HVAC","location":"Champagne, IL","latitude":40.43,"longitude":-88.171},
+        {"trade":"HVAC","location":"Austin, TX","latitude":30.123,"longitude":-97.49},
+        {"trade":"HVAC","location":"Dallas, TX","latitude":32.616,"longitude":-96.799},
+        {"trade":"HVAC","location":"Dallas, TX","latitude":32.673,"longitude":-96.756},
+        {"trade":"HVAC","location":"San Saba, TX","latitude":31.15,"longitude":-98.861},
+        {"trade":"ELECTRICAL","location":"Dallas, TX","latitude":32.755,"longitude":-96.979},
+        {"trade":"ELECTRICAL","location":"Dallas, TX","latitude":33.01,"longitude":-97.259},
+        {"trade":"ELECTRICAL","location":"Killeen, TX","latitude":31.215,"longitude":-97.881},
+        {"trade":"ELECTRICAL","location":"Prosper, TX","latitude":33.336,"longitude":-96.786},
+        {"trade":"ELECTRICAL","location":"Lisbon, ME","latitude":44.001,"longitude":-69.764},
+        {"trade":"ELECTRICAL","location":"Las Vegas, NV","latitude":36.056,"longitude":-114.771},
+        {"trade":"ELECTRICAL","location":"Beaumont, TX","latitude":30.097,"longitude":-94.289},
+        {"trade":"ELECTRICAL","location":"Charleston, SC","latitude":32.79,"longitude":-79.828},
+        {"trade":"ELECTRICAL","location":"Denton, TX","latitude":33.178,"longitude":-97.115},
+        {"trade":"ELECTRICAL","location":"Arlington, TX","latitude":32.609,"longitude":-96.95},
+        {"trade":"ELECTRICAL","location":"Grand Prairie, TX","latitude":32.912,"longitude":-96.859},
+        {"trade":"ELECTRICAL","location":"Dallas, TX","latitude":32.656,"longitude":-96.624},
+        {"trade":"ELECTRICAL","location":"Pasco, WA","latitude":46.126,"longitude":-119.069},
+        {"trade":"ELECTRICAL","location":"Celina, TX","latitude":33.419,"longitude":-97.131},
+        {"trade":"ELECTRICAL","location":"Dallas, TX","latitude":32.6,"longitude":-96.924},
+        {"trade":"ELECTRICAL","location":"Saginaw, TX","latitude":33.183,"longitude":-97.71},
+        {"trade":"ELECTRICAL","location":"Queensbury, NY","latitude":42.552,"longitude":-73.704},
+        {"trade":"ELECTRICAL","location":"Fort Worth, TX","latitude":32.698,"longitude":-96.665},
+        {"trade":"ELECTRICAL","location":"Tampa, FL","latitude":27.796,"longitude":-82.553},
+        {"trade":"ELECTRICAL","location":"Charlotte, NC","latitude":35.087,"longitude":-80.957},
+        {"trade":"ELECTRICAL","location":"El Paso, TX","latitude":31.597,"longitude":-106.83},
+        {"trade":"ELECTRICAL","location":"Dallas, TX","latitude":32.957,"longitude":-97.084},
+        {"trade":"FACILITIES","location":"Mansfield, TX","latitude":32.453,"longitude":-97.075},
+        {"trade":"FACILITIES","location":"McAllen, TX","latitude":26.467,"longitude":-98.06},
+        {"trade":"FACILITIES","location":"Lewisville, TX","latitude":32.724,"longitude":-96.909},
+        {"trade":"FACILITIES","location":"Charlottesville, VA","latitude":37.82,"longitude":-78.401},
+        {"trade":"FACILITIES","location":"Herrington, KS","latitude":38.836,"longitude":-99.261},
+        {"trade":"HVAC","location":"El Paso, TX","latitude":31.64,"longitude":-106.617},
+        {"trade":"HVAC","location":"Dallas, TX","latitude":32.938,"longitude":-96.884},
+        {"trade":"HVAC","location":"Raleigh, NC","latitude":35.608,"longitude":-78.94},
+        {"trade":"HVAC","location":"Denver, CO","latitude":39.763,"longitude":-104.401},
+        {"trade":"HVAC","location":"Baton Rouge, LA","latitude":30.527,"longitude":-90.866},
+        {"trade":"HVAC","location":"Chicago, IL","latitude":41.798,"longitude":-87.696},
+        {"trade":"HVAC","location":"Fort Worth, TX","latitude":33.04,"longitude":-96.879},
+        {"trade":"HVAC","location":"Junction City, KS","latitude":39.342,"longitude":-96.712},
+        {"trade":"HVAC","location":"Canyon Lake, TX","latitude":29.515,"longitude":-98.305},
+        {"trade":"HVAC","location":"Garland, TX","latitude":32.799,"longitude":-97.194},
+        {"trade":"HVAC","location":"Dallas, TX","latitude":33.062,"longitude":-97.208},
+        {"trade":"HVAC","location":"Fort Worth, TX","latitude":32.82,"longitude":-97.279},
+        {"trade":"HVAC","location":"Plano, TX","latitude":33.041,"longitude":-96.967},
+        {"trade":"HVAC","location":"Schertz, TX","latitude":29.327,"longitude":-98.525},
+        {"trade":"HVAC","location":"Temple, TX","latitude":31.528,"longitude":-97.44},
+        {"trade":"HVAC","location":"Dallas, TX","latitude":32.987,"longitude":-97.293},
+        {"trade":"HVAC","location":"Leesburg, VA","latitude":38.86,"longitude":-76.272},
+        {"trade":"HVAC","location":"Dallas, TX","latitude":32.803,"longitude":-96.881},
+        {"trade":"HVAC","location":"El Paso, TX","latitude":31.665,"longitude":-106.567},
+        {"trade":"HVAC","location":"Franklin, TN","latitude":35.711,"longitude":-85.727},
+        {"trade":"HVAC","location":"Junction City, KS","latitude":39.108,"longitude":-96.272},
+        {"trade":"HVAC","location":"Nashville, TN","latitude":36.202,"longitude":-86.759},
+        {"trade":"HVAC","location":"Fort Worth, TX","latitude":32.899,"longitude":-97.566},
+        {"trade":"HVAC","location":"Killeen, TX","latitude":31.035,"longitude":-97.565},
+        {"trade":"HVAC","location":"Port Orange, FL","latitude":28.761,"longitude":-80.785},
+        {"trade":"HVAC","location":"Dallas, TX","latitude":32.872,"longitude":-97.046},
+        {"trade":"HVAC","location":"Killeen, TX","latitude":31.318,"longitude":-97.979},
+        {"trade":"ELECTRICAL","location":"Lewisville, TX","latitude":32.698,"longitude":-97.002},
+        {"trade":"ELECTRICAL","location":"Fayetteville, LA","latitude":35.104,"longitude":-78.663},
+        {"trade":"ELECTRICAL","location":"Destin, FL","latitude":30.462,"longitude":-86.152},
+        {"trade":"ELECTRICAL","location":"Denton, TX","latitude":32.953,"longitude":-96.993},
+        {"trade":"ELECTRICAL","location":"St Louis, MO","latitude":37.924,"longitude":-91.961},
+        {"trade":"ELECTRICAL","location":"Rockwall, TX","latitude":32.777,"longitude":-96.939},
+        {"trade":"ELECTRICAL","location":"Orange City, FL","latitude":28.773,"longitude":-81.661},
+        {"trade":"ELECTRICAL","location":"Little Rock, AR","latitude":34.722,"longitude":-92.027},
+        {"trade":"ELECTRICAL","location":"Baton Rouge, LA","latitude":30.365,"longitude":-90.947},
+        {"trade":"ELECTRICAL","location":"St Louis, MO","latitude":38.883,"longitude":-92.157},
+        {"trade":"ELECTRICAL","location":"Denver, CO","latitude":39.598,"longitude":-105.13},
+        {"trade":"ELECTRICAL","location":"Fort Worth, TX","latitude":32.592,"longitude":-97.125},
+        {"trade":"ELECTRICAL","location":"Dallas, TX","latitude":32.991,"longitude":-97.108},
+        {"trade":"ELECTRICAL","location":"Irving, TX","latitude":32.729,"longitude":-97.179},
+        {"trade":"ELECTRICAL","location":"Tampa, FL","latitude":27.961,"longitude":-82.61},
+        {"trade":"ELECTRICAL","location":"Tallahassee, FL","latitude":30.635,"longitude":-84.485},
+        {"trade":"ELECTRICAL","location":"Blue Springs, MO","latitude":39.024,"longitude":-94.114},
+        {"trade":"ELECTRICAL","location":"Dallas, TX","latitude":32.989,"longitude":-96.843},
+        {"trade":"ELECTRICAL","location":"Dallas, TX","latitude":32.79,"longitude":-97.105},
+        {"trade":"ELECTRICAL","location":"Allen, TX","latitude":33.045,"longitude":-96.981},
+        {"trade":"ELECTRICAL","location":"Mayfield, KY","latitude":37.03,"longitude":-88.668},
+        {"trade":"ELECTRICAL","location":"Olympia, WA","latitude":47.358,"longitude":-122.556},
+        {"trade":"ELECTRICAL","location":"Lewisville, TX","latitude":32.869,"longitude":-97.04},
+        {"trade":"ELECTRICAL","location":"Prosper, TX","latitude":32.944,"longitude":-97.064},
+        {"trade":"PLUMBING","location":"Garland, TX","latitude":32.75,"longitude":-97.143},
+        {"trade":"PLUMBING","location":"Wills Point, TX","latitude":32.742,"longitude":-97.039},
+        {"trade":"PLUMBING","location":"San Antonio, TX","latitude":29.475,"longitude":-98.429},
+        {"trade":"PLUMBING","location":"Dallas, TX","latitude":32.718,"longitude":-97.007},
+        {"trade":"PLUMBING","location":"Forney, TX","latitude":33.003,"longitude":-96.996},
+        {"trade":"PLUMBING","location":"Decatur, TX","latitude":32.825,"longitude":-96.869},
+        {"trade":"PLUMBING","location":"Leesville, LA","latitude":31.1,"longitude":-93.084},
+        {"trade":"PLUMBING","location":"Arlington, TX","latitude":32.694,"longitude":-97.287},
+        {"trade":"HVAC","location":"Dallas, TX","latitude":32.763,"longitude":-97.05},
+        {"trade":"HVAC","location":"Irving, TX","latitude":32.658,"longitude":-96.54},
+        {"trade":"HVAC","location":"Dallas, TX","latitude":32.891,"longitude":-96.921},
+        {"trade":"HVAC","location":"Ft. Meyers, FL","latitude":27.237,"longitude":-83.183},
+        {"trade":"HVAC","location":"The Woodlands, TX","latitude":30.163,"longitude":-95.616},
+        {"trade":"HVAC","location":"Garland, TX","latitude":32.932,"longitude":-96.555},
+        {"trade":"HVAC","location":"Houston, TX","latitude":29.596,"longitude":-95.603},
+        {"trade":"HVAC","location":"Killeen, TX","latitude":30.93,"longitude":-97.527},
+        {"trade":"HVAC","location":"Fort Worth, TX","latitude":32.669,"longitude":-97.429},
+        {"trade":"HVAC","location":"Tulsa, OK","latitude":35.967,"longitude":-95.901},
+        {"trade":"HVAC","location":"DeSoto, TX","latitude":32.68,"longitude":-96.775},
+        {"trade":"HVAC","location":"Houston, TX","latitude":29.7,"longitude":-95.461},
+        {"trade":"HVAC","location":"Corsicana, TX","latitude":32.597,"longitude":-96.905},
+        {"trade":"HVAC","location":"Dallas, TX","latitude":32.905,"longitude":-96.844},
+        {"trade":"HVAC","location":"El Paso, TX","latitude":31.936,"longitude":-106.24},
+        {"trade":"ELECTRICAL","location":"Dallas, TX","latitude":32.904,"longitude":-96.723},
+        {"trade":"ELECTRICAL","location":"Dallas, TX","latitude":32.822,"longitude":-96.669},
+        {"trade":"ELECTRICAL","location":"Denton, TX","latitude":33.394,"longitude":-97.068},
+        {"trade":"ELECTRICAL","location":"Houston, TX","latitude":29.783,"longitude":-95.233},
+        {"trade":"ELECTRICAL","location":"Nashville, TN","latitude":36.298,"longitude":-86.76},
+        {"trade":"ELECTRICAL","location":"Irving, TX","latitude":32.618,"longitude":-96.886},
+        {"trade":"ELECTRICAL","location":"Paso Robles, CA","latitude":36.913,"longitude":-120.669},
+        {"trade":"ELECTRICAL","location":"Waco, TX","latitude":31.368,"longitude":-97.13},
+        {"trade":"ELECTRICAL","location":"Frisco, TX","latitude":33.332,"longitude":-96.785},
+        {"trade":"ELECTRICAL","location":"Belton, TX","latitude":31.194,"longitude":-97.666},
+        {"trade":"ELECTRICAL","location":"Dallas, TX","latitude":32.822,"longitude":-96.767},
+        {"trade":"ELECTRICAL","location":"Lake Charles, LA","latitude":30.305,"longitude":-93.074},
+        {"trade":"ELECTRICAL","location":"Plano, TX","latitude":32.698,"longitude":-96.699},
+        {"trade":"ELECTRICAL","location":"Fort Worth, TX","latitude":32.687,"longitude":-97.511},
+        {"trade":"ELECTRICAL","location":"Dallas, TX","latitude":32.753,"longitude":-97.235},
+        {"trade":"FACILITIES","location":"Dallas, TX","latitude":32.617,"longitude":-96.865},
+        {"trade":"FACILITIES","location":"McKinney, TX","latitude":33.347,"longitude":-96.613},
+        {"trade":"FACILITIES","location":"Fort Sill, OK","latitude":35.347,"longitude":-97.245},
+        {"trade":"FACILITIES","location":"San Angelo, TX","latitude":31.629,"longitude":-100.585},
+        {"trade":"FACILITIES","location":"Grand Prairie, TX","latitude":32.907,"longitude":-96.821},
+        {"trade":"FACILITIES","location":"Corpus Christi, TX","latitude":27.741,"longitude":-97.662},
+        {"trade":"FACILITIES","location":"Dallas, TX","latitude":32.852,"longitude":-96.549},
+        {"trade":"FACILITIES","location":"Coppell, TX","latitude":32.58,"longitude":-97.062},
+        {"trade":"HVAC","location":"St. George, UT","latitude":38.984,"longitude":-111.676},
+        {"trade":"HVAC","location":"The Colony, TX","latitude":32.948,"longitude":-97.008},
+        {"trade":"HVAC","location":"Arlington, TX","latitude":32.913,"longitude":-97.165},
+        {"trade":"HVAC","location":"Floresville, TX","latitude":29.282,"longitude":-98.39},
+        {"trade":"HVAC","location":"Mary Esther, FL","latitude":30.555,"longitude":-86.65},
+        {"trade":"HVAC","location":"Baton Rouge, LA","latitude":30.638,"longitude":-91.053},
+        {"trade":"HVAC","location":"Dallas, TX","latitude":32.887,"longitude":-96.533},
+        {"trade":"HVAC","location":"Dallas, TX","latitude":32.909,"longitude":-97.019},
+        {"trade":"HVAC","location":"Phoenix, AZ","latitude":33.307,"longitude":-112.123},
+        {"trade":"ELECTRICAL","location":"League City, TX","latitude":29.624,"longitude":-95.507},
+        {"trade":"ELECTRICAL","location":"Hillsdale, MI","latitude":42.068,"longitude":-84.417},
+        {"trade":"ELECTRICAL","location":"Houston, TX","latitude":29.895,"longitude":-95.463},
+        {"trade":"ELECTRICAL","location":"Austin, TX","latitude":30.428,"longitude":-97.903},
+        {"trade":"ELECTRICAL","location":"Dallas, TX","latitude":32.84,"longitude":-96.8},
+        {"trade":"ELECTRICAL","location":"Newark, NJ","latitude":40.661,"longitude":-74.002},
+        {"trade":"ELECTRICAL","location":"Nantucket, MA","latitude":41.673,"longitude":-70.398},
+        {"trade":"ELECTRICAL","location":"Lansing, MI","latitude":42.854,"longitude":-84.808},
+        {"trade":"ELECTRICAL","location":"San Jose, CA","latitude":37.282,"longitude":-121.616},
+        {"trade":"ELECTRICAL","location":"Lessville, LA","latitude":31.558,"longitude":-91.031},
+        {"trade":"ELECTRICAL","location":"Tulsa, OK","latitude":36.092,"longitude":-95.846},
+        {"trade":"ELECTRICAL","location":"San Diego, CA","latitude":32.911,"longitude":-117.421},
+        {"trade":"ELECTRICAL","location":"Dallas, TX","latitude":33.021,"longitude":-96.905},
+        {"trade":"ELECTRICAL","location":"Atlantic City, NJ","latitude":39.393,"longitude":-74.587},
+        {"trade":"ELECTRICAL","location":"Dallas, TX","latitude":32.837,"longitude":-96.643},
+        {"trade":"FACILITIES","location":"Jefferson City, MO","latitude":38.496,"longitude":-92.107},
+        {"trade":"FACILITIES","location":"St. Louis, MO","latitude":38.517, "longitude":-90.473},
+        {"trade":"FACILITIES","location":"Clanton, AL","latitude":32.464,"longitude":-85.926},
+        {"trade":"HVAC","location":"Houston, TX","latitude":29.733,"longitude":-95.137},
+        {"trade":"HVAC","location":"Waco, TX","latitude":31.738,"longitude":-96.9},
+        {"trade":"HVAC","location":"San Antonio, TX","latitude":29.45,"longitude":-98.617},
+        {"trade":"HVAC","location":"Honolulu, HI","latitude":21.354,"longitude":-157.688},
+        {"trade":"HVAC","location":"Forney, TX","latitude":32.839,"longitude":-96.75},
+        {"trade":"HVAC","location":"Waco, TX","latitude":31.373,"longitude":-97.43},
+        {"trade":"HVAC","location":"Leavenworth, KS","latitude":39.143,"longitude":-95.461},
+        {"trade":"HVAC","location":"Cedar Rapids, IA","latitude":41.929,"longitude":-91.514},
+        {"trade":"HVAC","location":"Brownwood, TX","latitude":31.817,"longitude":-99.888},
+        {"trade":"HVAC","location":"Savannah, GA","latitude":32.019,"longitude":-80.865},
+        {"trade":"HVAC","location":"Carrolton, TX","latitude":32.887,"longitude":-97.231},
+        {"trade":"HVAC","location":"Goldsboro, NC","latitude":35.296,"longitude":-79.218},
+        {"trade":"HVAC","location":"Dallas, TX","latitude":32.795,"longitude":-96.979},
+        {"trade":"HVAC","location":"Lewisville, TX","latitude":33.016,"longitude":-96.894},
+        {"trade":"HVAC","location":"Mesquite, TX","latitude":32.631,"longitude":-96.748},
+        {"trade":"ELECTRICAL","location":"Blytheville, AR","latitude":36.269,"longitude":-90.116},
+        {"trade":"ELECTRICAL","location":"Frisco, TX","latitude":33.115,"longitude":-96.526},
+        {"trade":"ELECTRICAL","location":"Fort Riley, KS","latitude":39.05,"longitude":-98.754},
+        {"trade":"ELECTRICAL","location":"Lewisville, TX","latitude":32.85,"longitude":-97.197},
+        {"trade":"ELECTRICAL","location":"San Antonio, TX","latitude":29.62,"longitude":-98.369},
+        {"trade":"ELECTRICAL","location":"McPherson, KS","latitude":38.178,"longitude":-97.672},
+        {"trade":"ELECTRICAL","location":"Killeen, TX","latitude":31.271,"longitude":-97.603},
+        {"trade":"ELECTRICAL","location":"Elgin, IL","latitude":42.185,"longitude":-88.157},
+        {"trade":"ELECTRICAL","location":"Stillwater, OK","latitude":35.167,"longitude":-97.94},
+        {"trade":"FACILITIES","location":"Dallas, TX","latitude":32.737,"longitude":-96.859},
+        {"trade":"FACILITIES","location":"Killeen, TX","latitude":31.274,"longitude":-97.805},
+        {"trade":"FACILITIES","location":"Dallas, TX","latitude":32.756,"longitude":-97.247},
+        {"trade":"FACILITIES","location":"Washington, DC","latitude":38.885,"longitude":-77.163},
+        {"trade":"HVAC","location":"Dallas, TX","latitude":33.026,"longitude":-96.962},
+        {"trade":"HVAC","location":"Fort Worth, TX","latitude":32.843,"longitude":-97.524},
+        {"trade":"HVAC","location":"Brownsville, TX","latitude":25.927,"longitude":-97.376},
+        {"trade":"HVAC","location":"Georgetown, TX","latitude":30.576,"longitude":-97.559},
+        {"trade":"HVAC","location":"Benton, WI","latitude":44.702,"longitude":-90.124},
+        {"trade":"HVAC","location":"Hutto, TX","latitude":30.437,"longitude":-97.949},
+        {"trade":"HVAC","location":"Fort Washington, MD","latitude":38.541,"longitude":-76.362},
+        {"trade":"HVAC","location":"Garland, TX","latitude":33.084,"longitude":-96.876},
+        {"trade":"HVAC","location":"Forest Lake, MN","latitude":45.537,"longitude":-92.654},
+        {"trade":"HVAC","location":"Santa Clarita, CA","latitude":34.621,"longitude":-118.115},
+        {"trade":"HVAC","location":"Dallas, TX","latitude":32.78,"longitude":-96.963},
+        {"trade":"HVAC","location":"Lincoln, NE","latitude":40.709,"longitude":-96.387},
+        {"trade":"HVAC","location":"Dallas, TX","latitude":32.753,"longitude":-97.193},
+        {"trade":"HVAC","location":"San Antonio, TX","latitude":29.614,"longitude":-98.646},
+        {"trade":"HVAC","location":"Buena Vista, CO","latitude":38.809,"longitude":-106.068},
+        {"trade":"HVAC","location":"El Paso, TX","latitude":31.86,"longitude":-106.698},
+        {"trade":"HVAC","location":"DeSoto, TX","latitude":32.878,"longitude":-97.211},
+        {"trade":"HVAC","location":"Dallas, TX","latitude":33.08,"longitude":-97.077},
+        {"trade":"HVAC","location":"Dallas, TX","latitude":32.892,"longitude":-96.766},
+        {"trade":"ELECTRICAL","location":"Conroe, TX","latitude":30.381,"longitude":-95.165},
+        {"trade":"ELECTRICAL","location":"Murphy, TX","latitude":32.861,"longitude":-96.817},
+        {"trade":"ELECTRICAL","location":"Destin, FL","latitude":30.752,"longitude":-86.182},
+        {"trade":"ELECTRICAL","location":"Aubrey, TX","latitude":33.074,"longitude":-96.966},
+        {"trade":"ELECTRICAL","location":"Raleigh, NC","latitude":35.637,"longitude":-78.599},
+        {"trade":"ELECTRICAL","location":"San Antonio, TX","latitude":29.506,"longitude":-98.709},
+        {"trade":"ELECTRICAL","location":"Sumrall, MS","latitude":32.68,"longitude":-89.801},
+        {"trade":"ELECTRICAL","location":"Dallas, TX","latitude":32.763,"longitude":-96.928},
+        {"trade":"ELECTRICAL","location":"Grapevine, TX","latitude":32.885,"longitude":-96.983},
+        {"trade":"ELECTRICAL","location":"Killeen, TX","latitude":31.134,"longitude":-97.661},
+        {"trade":"ELECTRICAL","location":"Dallas, TX","latitude":33.002,"longitude":-97.05},
+        {"trade":"ELECTRICAL","location":"Kosciusko, MS","latitude":33.258,"longitude":-88.976},
+        {"trade":"ELECTRICAL","location":"Cedar Park, TX","latitude":30.407,"longitude":-98.045},
+        {"trade":"ELECTRICAL","location":"San Marcos, TX","latitude":30.266,"longitude":-97.811},
+        {"trade":"ELECTRICAL","location":"Moultrie, GA","latitude":31.305,"longitude":-83.744},
+        {"trade":"ELECTRICAL","location":"Houston, TX","latitude":29.584,"longitude":-95.553},
+        {"trade":"ELECTRICAL","location":"Harrisville, NY","latitude":43.453,"longitude":-76.681},
+        {"trade":"ELECTRICAL","location":"Sherman, TX","latitude":33.523,"longitude":-96.575},
+        {"trade":"ELECTRICAL","location":"Dallas, TX","latitude":32.906,"longitude":-96.887},
+        {"trade":"ELECTRICAL","location":"Dallas, TX","latitude":33.037,"longitude":-97.272},
+        {"trade":"ELECTRICAL","location":"Dallas, TX","latitude":32.925,"longitude":-97.227},
+        {"trade":"ELECTRICAL","location":"Dallas, TX","latitude":33.072,"longitude":-96.877},
+        {"trade":"ELECTRICAL","location":"Austin, TX","latitude":30.172,"longitude":-97.832},
+        {"trade":"ELECTRICAL","location":"Dallas, TX","latitude":33.08,"longitude":-96.765},
+        {"trade":"ELECTRICAL","location":"Sacramento, CA","latitude":38.687,"longitude":-121.767},
+        {"trade":"PLUMBING","location":"Irving, TX","latitude":32.778,"longitude":-96.978},
+        {"trade":"PLUMBING","location":"Fort Worth, TX","latitude":32.633,"longitude":-97.32},
+        {"trade":"HVAC","location":"El Paso, TX","latitude":31.573,"longitude":-106.473},
+        {"trade":"HVAC","location":"Dallas, TX","latitude":32.881,"longitude":-96.843},
+        {"trade":"HVAC","location":"Mesquite, TX","latitude":32.719,"longitude":-96.56},
+        {"trade":"HVAC","location":"Los Banos, CA","latitude":36.793,"longitude":-120.869},
+        {"trade":"HVAC","location":"Buena Vista, CO","latitude":38.942,"longitude":-106.099},
+        {"trade":"HVAC","location":"Dallas, TX","latitude":32.962,"longitude":-96.607},
+        {"trade":"HVAC","location":"Greenville, SC","latitude":34.323,"longitude":-81.716},
+        {"trade":"HVAC","location":"Fort Worth, TX","latitude":32.93,"longitude":-96.552},
+        {"trade":"HVAC","location":"Reno, NV","latitude":39.577,"longitude":-119.234},
+        {"trade":"HVAC","location":"Waxahachie, TX","latitude":32.338,"longitude":-97.038},
+        {"trade":"HVAC","location":"Killeen, TX","latitude":31.191,"longitude":-97.829},
+        {"trade":"HVAC","location":"Grand Rapids, MI","latitude":42.881,"longitude":-85.573},
+        {"trade":"HVAC","location":"Lufkin, TX","latitude":31.389,"longitude":-95.021},
+        {"trade":"HVAC","location":"Leesville, LA","latitude":31.117,"longitude":-93.513},
+        {"trade":"HVAC","location":"Tulsa, OK","latitude":35.986,"longitude":-96.225},
+        {"trade":"HVAC","location":"Dallas, TX","latitude":32.954,"longitude":-96.529},
+        {"trade":"HVAC","location":"Carrolton, TX","latitude":31.754,"longitude":-98.737},
+        {"trade":"HVAC","location":"Killeen, TX","latitude":31.196,"longitude":-97.474},
+        {"trade":"HVAC","location":"Jacksonville, NC","latitude":34.307,"longitude":-77.487},
+        {"trade":"HVAC","location":"Killeen, TX","latitude":31.066,"longitude":-97.827},
+        {"trade":"ELECTRICAL","location":"Tulsa, OK","latitude":36.058,"longitude":-96.098},
+        {"trade":"ELECTRICAL","location":"Dallas, TX","latitude":32.987,"longitude":-96.77},
+        {"trade":"ELECTRICAL","location":"Mesquite, TX","latitude":33.059,"longitude":-97.106},
+        {"trade":"ELECTRICAL","location":"Dallas, TX","latitude":32.931,"longitude":-97.202},
+        {"trade":"ELECTRICAL","location":"Dallas, TX","latitude":32.813,"longitude":-96.793},
+        {"trade":"ELECTRICAL","location":"Chicago, IL","latitude":41.865,"longitude":-87.897},
+        {"trade":"ELECTRICAL","location":"Dallas, TX","latitude":32.883,"longitude":-96.867},
+        {"trade":"ELECTRICAL","location":"Okmulgee, OK","latitude":36.222,"longitude":-96.223},
+        {"trade":"ELECTRICAL","location":"Mesquite, TX","latitude":32.846,"longitude":-97.147},
+        {"trade":"ELECTRICAL","location":"Fort Worth, TX","latitude":32.668,"longitude":-96.953},
+        {"trade":"ELECTRICAL","location":"El Paso, TX","latitude":31.905,"longitude":-106.418},
+        {"trade":"ELECTRICAL","location":"Herrington, KS","latitude":38.864,"longitude":-98.586},
+        {"trade":"ELECTRICAL","location":"Dallas, TX","latitude":33.027,"longitude":-97.336},
+        {"trade":"ELECTRICAL","location":"Weslaco, TX","latitude":26.242,"longitude":-98.082},
+        {"trade":"ELECTRICAL","location":"McKinney, TX","latitude":33.107,"longitude":-96.499},
+        {"trade":"FACILITIES","location":"Dallas, TX","latitude":32.652,"longitude":-96.573},
+        {"trade":"FACILITIES","location":"McKinney, TX","latitude":33.232,"longitude":-96.415},
+        {"trade":"HVAC","location":"Thibodaux, LA","latitude":29.594,"longitude":-91.039},
+        {"trade":"HVAC","location":"Dallas, TX","latitude":32.703,"longitude":-96.748},
+        {"trade":"HVAC","location":"Poplar Bluff, MO","latitude":36.634,"longitude":-90.895},
+        {"trade":"HVAC","location":"Colorado Springs, CO","latitude":39.089,"longitude":-104.752},
+        {"trade":"HVAC","location":"Dallas, TX","latitude":32.794,"longitude":-97.151},
+        {"trade":"HVAC","location":"Miami, FL","latitude":25.666,"longitude":-80.341},
+        {"trade":"HVAC","location":"Clarksville, TN","latitude":36.503,"longitude":-87.592},
+        {"trade":"HVAC","location":"Charlottesville, VA","latitude":37.726,"longitude":-78.45},
+        {"trade":"HVAC","location":"Newnan, GA","latitude":33.442,"longitude":-84.957},
+        {"trade":"HVAC","location":"Orland Park, IL","latitude":41.77,"longitude":-88.077},
+        {"trade":"HVAC","location":"Fayetteville, NC","latitude":35.004,"longitude":-79.096},
+        {"trade":"HVAC","location":"Dallas, TX","latitude":32.936,"longitude":-96.753},
+        {"trade":"HVAC","location":"Dallas, TX","latitude":33.001,"longitude":-97.211},
+        {"trade":"HVAC","location":"Baton Rouge, LA","latitude":30.421,"longitude":-91.144},
+        {"trade":"HVAC","location":"Dallas, TX","latitude":32.802,"longitude":-96.762},
+        {"trade":"HVAC","location":"Junction City, KS","latitude":38.963,"longitude":-97.039},
+        {"trade":"HVAC","location":"Dallas, TX","latitude":32.781,"longitude":-96.888},
+        {"trade":"HVAC","location":"Temple, TX","latitude":31.127,"longitude":-97.601},
+        {"trade":"HVAC","location":"Leesville, LA","latitude":31.29,"longitude":-92.977},
+        {"trade":"HVAC","location":"Dallas, TX","latitude":33.004,"longitude":-97.217},
+        {"trade":"HVAC","location":"Dallas, TX","latitude":32.911,"longitude":-96.909},
+        {"trade":"HVAC","location":"Burleson, TX","latitude":32.41,"longitude":-97.026},
+        {"trade":"HVAC","location":"Dallas, TX","latitude":32.799,"longitude":-96.831},
+        {"trade":"HVAC","location":"Salina, KS","latitude":39.14,"longitude":-97.934},
+        {"trade":"ELECTRICAL","location":"Dallas, TX","latitude":32.696,"longitude":-97.287},
+        {"trade":"ELECTRICAL","location":"Fayetteville, NC","latitude":34.88,"longitude":-79.133},
+        {"trade":"ELECTRICAL","location":"Dallas, TX","latitude":32.979,"longitude":-96.788},
+        {"trade":"ELECTRICAL","location":"Dallas, TX","latitude":33.009,"longitude":-96.849},
+        {"trade":"ELECTRICAL","location":"Dallas, TX","latitude":33.002,"longitude":-97.236},
+        {"trade":"ELECTRICAL","location":"Dallas, TX","latitude":32.844,"longitude":-97.312},
+        {"trade":"ELECTRICAL","location":"San Angelo, TX","latitude":31.116,"longitude":-100.047},
+        {"trade":"ELECTRICAL","location":"Clarksville, TN","latitude":36.145,"longitude":-86.526},
+        {"trade":"ELECTRICAL","location":"Roseburg, OR","latitude":42.836,"longitude":-123.053},
+        {"trade":"ELECTRICAL","location":"Dallas, TX","latitude":32.954,"longitude":-97.156},
+        {"trade":"ELECTRICAL","location":"San Antonio, TX","latitude":29.247,"longitude":-98.66},
+        {"trade":"ELECTRICAL","location":"Barbourville, KY","latitude":37.141,"longitude":-85.273},
+        {"trade":"ELECTRICAL","location":"El Paso, TX","latitude":31.696,"longitude":-106.359},
+        {"trade":"ELECTRICAL","location":"Dallas, TX","latitude":32.935,"longitude":-97.274},
+        {"trade":"PLUMBING","location":"Dallas, TX","latitude":33.034,"longitude":-97.09},
+        {"trade":"PLUMBING","location":"San Antonio, TX","latitude":29.315,"longitude":-98.77},
+        {"trade":"PLUMBING","location":"Manhattan, KS","latitude":38.961,"longitude":-96.839},
+        {"trade":"PLUMBING","location":"Dallas, TX","latitude":32.991,"longitude":-97.219},
+        {"trade":"PLUMBING","location":"Leesville, LA","latitude":31.009,"longitude":-93.304},
+        {"trade":"PLUMBING","location":"Edmond, OK","latitude":35.301,"longitude":-97.274},
+        {"trade":"PLUMBING","location":"Fenton, MI","latitude":43.121,"longitude":-83.481},
+        {"trade":"PLUMBING","location":"Dallas, TX","latitude":32.787,"longitude":-96.84},
+        {"trade":"PLUMBING","location":"Dallas, TX","latitude":32.997,"longitude":-97.019},
+        {"trade":"PLUMBING","location":"West, TX","latitude":31.88,"longitude":-97.612},
+        {"trade":"HVAC","location":"Oneida, NY","latitude":43.13,"longitude":-75.785},
+        {"trade":"HVAC","location":"Dallas, TX","latitude":32.988,"longitude":-96.757},
+        {"trade":"HVAC","location":"College Station, TX","latitude":30.638,"longitude":-96.552},
+        {"trade":"HVAC","location":"Dallas, TX","latitude":32.888,"longitude":-96.516},
+        {"trade":"HVAC","location":"Plano, TX","latitude":32.795,"longitude":-96.54},
+        {"trade":"HVAC","location":"Houston, TX","latitude":29.861,"longitude":-95.22},
+        {"trade":"HVAC","location":"Saint Cloud, MN","latitude":45.482,"longitude":-94.311},
+        {"trade":"HVAC","location":"Arlington, WA","latitude":46.93,"longitude":-121.157},
+        {"trade":"HVAC","location":"Addison, TX","latitude":33.35,"longitude":-96.772},
+        {"trade":"HVAC","location":"Columbia, TN","latitude":35.723,"longitude":-86.982},
+        {"trade":"HVAC","location":"Manhattan, KS","latitude":39.33,"longitude":-96.795},
+        {"trade":"ELECTRICAL","location":"Amarillo, TX","latitude":35.254,"longitude":-101.674},
+        {"trade":"ELECTRICAL","location":"West Chester, PA","latitude":39.949,"longitude":-75.57},
+        {"trade":"ELECTRICAL","location":"Odessa, TX","latitude":31.794,"longitude":-102.267},
+        {"trade":"ELECTRICAL","location":"Knoxville, TN","latitude":36.111,"longitude":-83.861},
+        {"trade":"ELECTRICAL","location":"Addison, TX","latitude":33.044,"longitude":-96.627},
+        {"trade":"ELECTRICAL","location":"Dallas, TX","latitude":32.784,"longitude":-96.949},
+        {"trade":"ELECTRICAL","location":"Port Orange, FL","latitude":28.393,"longitude":-81.587},
+        {"trade":"ELECTRICAL","location":"Lawton, OK","latitude":35.837,"longitude":-97.772},
+        {"trade":"ELECTRICAL","location":"Spring Lake, NC","latitude":35.013,"longitude":-79.184},
+        {"trade":"ELECTRICAL","location":"Dallas, TX","latitude":32.717,"longitude":-96.696},
+        {"trade":"ELECTRICAL","location":"Dallas, TX","latitude":32.774,"longitude":-97.173},
+        {"trade":"ELECTRICAL","location":"Houston, TX","latitude":29.649,"longitude":-95.366},
+        {"trade":"ELECTRICAL","location":"Union, MI","latitude":44.022,"longitude":-83.948},
+        {"trade":"ELECTRICAL","location":"Kansas City, MO","latitude":39.179,"longitude":-94.805},
+        {"trade":"ELECTRICAL","location":"Mesquite, TX","latitude":32.671,"longitude":-96.746},
+        {"trade":"ELECTRICAL","location":"Phoenix, AZ","latitude":33.628,"longitude":-111.83},
+        {"trade":"ELECTRICAL","location":"Killeen, TX","latitude":31.006,"longitude":-97.657},
+        {"trade":"ELECTRICAL","location":"Kaufman, TX","latitude":32.738,"longitude":-96.014},
+        {"trade":"ELECTRICAL","location":"Edmond, OK","latitude":35.562,"longitude":-97.27},
+        {"trade":"ELECTRICAL","location":"McKinney, TX","latitude":33.006,"longitude":-96.378},
+        {"trade":"ELECTRICAL","location":"Niceville, FL","latitude":30.287,"longitude":-86.624},
+        {"trade":"ELECTRICAL","location":"Rossville, GA","latitude":34.739,"longitude":-85.564},
+        {"trade":"ELECTRICAL","location":"Buffalo, WY","latitude":44.514,"longitude":-106.774},
+        {"trade":"ELECTRICAL","location":"Dallas, TX","latitude":32.809,"longitude":-96.991},
+        {"trade":"ELECTRICAL","location":"Dallas, TX","latitude":32.729,"longitude":-97.006},
+        {"trade":"FACILITIES","location":"Euless, TX","latitude":32.56,"longitude":-97.323},
+        {"trade":"FACILITIES","location":"Dallas, TX","latitude":32.773,"longitude":-96.736},
+        {"trade":"FACILITIES","location":"Albuquerque, NM","latitude":34.421,"longitude":-105.903},
+        {"trade":"FACILITIES","location":"Fayetteville, NC","latitude":35.227,"longitude":-78.941},
+        {"trade":"HVAC","location":"Dallas, TX","latitude":32.924,"longitude":-97.028},
+        {"trade":"HVAC","location":"El Paso, TX","latitude":31.765,"longitude":-106.748},
+        {"trade":"HVAC","location":"Cincinnati, OH","latitude":38.934,"longitude":-84.463},
+        {"trade":"HVAC","location":"Culpeper, VA","latitude":37.605,"longitude":-79.236},
+        {"trade":"HVAC","location":"Dallas, TX","latitude":32.718,"longitude":-97.038},
+        {"trade":"HVAC","location":"Muskegon, MI","latitude":43.301,"longitude":-86.154},
+        {"trade":"HVAC","location":"Cedar Rapids, IA","latitude":42.262,"longitude":-91.789},
+        {"trade":"HVAC","location":"Wichita, KS","latitude":38.193,"longitude":-98.788},
+        {"trade":"HVAC","location":"Charlotte, NC","latitude":35.255,"longitude":-80.662},
+        {"trade":"HVAC","location":"Tampa, FL","latitude":27.998,"longitude":-82.539},
+        {"trade":"HVAC","location":"Greenville, TX","latitude":32.891,"longitude":-95.871},
+        {"trade":"HVAC","location":"Killeen, TX","latitude":31.188,"longitude":-97.527},
+        {"trade":"HVAC","location":"Dallas, TX","latitude":32.946,"longitude":-96.668},
+        {"trade":"HVAC","location":"Killeen, TX","latitude":30.991,"longitude":-97.676},
+        {"trade":"HVAC","location":"Dallas, TX","latitude":32.613,"longitude":-96.99},
+        {"trade":"HVAC","location":"Irving, TX","latitude":32.785,"longitude":-96.876},
+        {"trade":"HVAC","location":"Los Cruces, NM","latitude":34.151,"longitude":-106.331},
+        {"trade":"HVAC","location":"Dallas, TX","latitude":32.809,"longitude":-97.276},
+        {"trade":"HVAC","location":"Dallas, TX","latitude":33.046,"longitude":-96.843},
+        {"trade":"HVAC","location":"Okmulgee, OK","latitude":36.264,"longitude":-96.203},
+        {"trade":"HVAC","location":"Killeen, TX","latitude":31.251,"longitude":-97.473},
+        {"trade":"HVAC","location":"Fayetteville, NC","latitude":34.878,"longitude":-79.032},
+        {"trade":"ELECTRICAL","location":"Fort Worth, TX","latitude":32.667,"longitude":-97.51},
+        {"trade":"ELECTRICAL","location":"Waxahachie, TX","latitude":32.414,"longitude":-96.711},
+        {"trade":"ELECTRICAL","location":"Arlington, TX","latitude":32.775,"longitude":-96.872},
+        {"trade":"ELECTRICAL","location":"Dawsonville, GA","latitude":34.421,"longitude":-84.523},
+        {"trade":"ELECTRICAL","location":"Temple, TX","latitude":31.529,"longitude":-97.004},
+        {"trade":"ELECTRICAL","location":"Dallas, TX","latitude":32.747,"longitude":-97.062},
+        {"trade":"ELECTRICAL","location":"Greenville, SC","latitude":35.009,"longitude":-82.076},
+        {"trade":"ELECTRICAL","location":"Dallas, TX","latitude":32.732,"longitude":-97.055},
+        {"trade":"ELECTRICAL","location":"Richardson, TX","latitude":32.956,"longitude":-96.902},
+        {"trade":"ELECTRICAL","location":"Sulphur, LA","latitude":29.981,"longitude":-93.535},
+        {"trade":"ELECTRICAL","location":"Plano, TX","latitude":32.997,"longitude":-96.474},
+        {"trade":"PLUMBING","location":"Coleman, TX","latitude":32.02,"longitude":-99.5},
+        {"trade":"PLUMBING","location":"Coleman, TX","latitude":32.023,"longitude":-99.605},
+        {"trade":"PLUMBING","location":"Dallas, TX","latitude":33.035,"longitude":-97.094},
+        {"trade":"PLUMBING","location":"Dallas, TX","latitude":32.697,"longitude":-97.205},
+        {"trade":"PLUMBING","location":"Chattanooga, TN","latitude":34.949,"longitude":-85.221},
+        {"trade":"PLUMBING","location":"Dallas, TX","latitude":32.759,"longitude":-96.951},
+        {"trade":"PLUMBING","location":"Dallas, TX","latitude":32.815,"longitude":-96.95},
+        {"trade":"PLUMBING","location":"Oklahoma City, OK","latitude":35.633,"longitude":-97.425},
+        {"trade":"PLUMBING","location":"Dallas, TX","latitude":32.969,"longitude":-96.989},
+        {"trade":"PLUMBING","location":"Dallas, TX","latitude":32.919,"longitude":-97.052},
+        {"trade":"HVAC","location":"Forney, TX","latitude":32.992,"longitude":-97.092},
+        {"trade":"HVAC","location":"Plano, TX","latitude":32.852,"longitude":-96.856},
+        {"trade":"HVAC","location":"Dallas, TX","latitude":32.879,"longitude":-97.094},
+        {"trade":"HVAC","location":"Tampa, FL","latitude":27.876,"longitude":-82.567},
+        {"trade":"HVAC","location":"Dallas, TX","latitude":32.688,"longitude":-97.027},
+        {"trade":"HVAC","location":"Richland, WA","latitude":47.367,"longitude":-120.572},
+        {"trade":"HVAC","location":"Dallas, TX","latitude":32.94,"longitude":-97.106},
+        {"trade":"HVAC","location":"San Marcos, TX","latitude":29.613,"longitude":-97.689},
+        {"trade":"HVAC","location":"McAllen, TX","latitude":26.171,"longitude":-98.437},
+        {"trade":"HVAC","location":"Dallas, TX","latitude":33.02,"longitude":-96.759},
+        {"trade":"HVAC","location":"Edmond, OK","latitude":35.475,"longitude":-97.506},
+        {"trade":"HVAC","location":"Dallas, TX","latitude":32.943,"longitude":-96.91},
+        {"trade":"HVAC","location":"Friendswood, TX","latitude":29.631,"longitude":-94.962},
+        {"trade":"HVAC","location":"Phoenix, AZ","latitude":33.591,"longitude":-111.927},
+        {"trade":"ELECTRICAL","location":"Dallas, TX","latitude":32.769,"longitude":-97.006},
+        {"trade":"ELECTRICAL","location":"Clarksville, TN","latitude":36.445,"longitude":-87.28},
+        {"trade":"ELECTRICAL","location":"Denton, TX","latitude":32.821,"longitude":-97.224},
+        {"trade":"ELECTRICAL","location":"Dallas, TX","latitude":32.688,"longitude":-96.812},
+        {"trade":"ELECTRICAL","location":"Plano, TX","latitude":32.922,"longitude":-96.902},
+        {"trade":"ELECTRICAL","location":"Los Angeles, CA","latitude":33.864,"longitude":-118.181},
+        {"trade":"ELECTRICAL","location":"Norwich, CT","latitude":41.105,"longitude":-72.646},
+        {"trade":"ELECTRICAL","location":"Flower Mound, TX","latitude":32.777,"longitude":-96.911},
+        {"trade":"ELECTRICAL","location":"Atlanta, GA","latitude":33.74,"longitude":-84.62},
+        {"trade":"ELECTRICAL","location":"Dallas, TX","latitude":32.78,"longitude":-96.829},
+        {"trade":"FACILITIES","location":"Spring Lake, NC","latitude":35.356,"longitude":-78.751},
+        {"trade":"FACILITIES","location":"Dallas, TX","latitude":32.98,"longitude":-96.518},
+        {"trade":"HVAC","location":"Arlington, TX","latitude":32.563,"longitude":-97.093},
+        {"trade":"HVAC","location":"Crown Point, IN","latitude":41.177,"longitude":-87.439},
+        {"trade":"HVAC","location":"Charlotte, NC","latitude":35.132,"longitude":-80.59},
+        {"trade":"HVAC","location":"Weslaco, TX","latitude":26.293,"longitude":-98.088},
+        {"trade":"HVAC","location":"Dallas, TX","latitude":32.793,"longitude":-97.132},
+        {"trade":"HVAC","location":"Fort Worth, TX","latitude":32.903,"longitude":-96.871},
+        {"trade":"HVAC","location":"Hampton, VA","latitude":36.973,"longitude":-76.198},
+        {"trade":"HVAC","location":"Dallas, TX","latitude":32.619,"longitude":-96.8},
+        {"trade":"HVAC","location":"Dallas, TX","latitude":32.835,"longitude":-96.667},
+        {"trade":"HVAC","location":"Dallas, TX","latitude":32.711,"longitude":-97.118},
+        {"trade":"HVAC","location":"Flower Mound, TX","latitude":33.108,"longitude":-97.223},
+        {"trade":"HVAC","location":"Fredericksburg, VA","latitude":38.585,"longitude":-77.17},
+        {"trade":"HVAC","location":"Rockwall, TX","latitude":32.783,"longitude":-96.452},
+        {"trade":"HVAC","location":"Fort Leonard Wood, MO","latitude":37.432,"longitude":-92.115},
+        {"trade":"ELECTRICAL","location":"Rockwall, TX","latitude":33.068,"longitude":-96.291},
+        {"trade":"ELECTRICAL","location":"Houston, TX","latitude":29.848,"longitude":-95.163},
+        {"trade":"ELECTRICAL","location":"Leesville, LA","latitude":31.288,"longitude":-93.099},
+        {"trade":"ELECTRICAL","location":"Houston, TX","latitude":29.587,"longitude":-95.323},
+        {"trade":"ELECTRICAL","location":"Kansas City, MO","latitude":39.487,"longitude":-94.649},
+        {"trade":"ELECTRICAL","location":"Billings, MT","latitude":45.7,"longitude":-108.19},
+        {"trade":"ELECTRICAL","location":"Temple, TX","latitude":31.118,"longitude":-97.399},
+        {"trade":"ELECTRICAL","location":"Frisco, TX","latitude":32.821,"longitude":-96.778},
+        {"trade":"ELECTRICAL","location":"Dallas, TX","latitude":32.935,"longitude":-97.011},
+        {"trade":"ELECTRICAL","location":"Denton, TX","latitude":32.851,"longitude":-96.606},
+        {"trade":"ELECTRICAL","location":"Mankato, MN","latitude":44.255,"longitude":-93.919},
+        {"trade":"ELECTRICAL","location":"Dallas, TX","latitude":32.826,"longitude":-96.838},
+        {"trade":"ELECTRICAL","location":"Arlington, TX","latitude":32.582,"longitude":-97.107},
+        {"trade":"ELECTRICAL","location":"Dallas, TX","latitude":32.941,"longitude":-96.823},
+        {"trade":"ELECTRICAL","location":"Junction City, KS","latitude":38.863,"longitude":-96.901},
+        {"trade":"ELECTRICAL","location":"Defiance, OH","latitude":40.958,"longitude":-82.664},
+        {"trade":"ELECTRICAL","location":"Finlayson, MN","latitude":46.191,"longitude":-93.083},
+        {"trade":"ELECTRICAL","location":"Dallas, TX","latitude":33.044,"longitude":-97.082},
+        {"trade":"ELECTRICAL","location":"Dallas, TX","latitude":32.665,"longitude":-96.6},
+        {"trade":"PLUMBING","location":"Dallas, TX","latitude":32.816,"longitude":-96.806},
+        {"trade":"PLUMBING","location":"Chicago, IL","latitude":41.725,"longitude":-87.565},
+        {"trade":"PLUMBING","location":"McKinney, TX","latitude":33.217,"longitude":-96.778},
+        {"trade":"PLUMBING","location":"Fort Worth, TX","latitude":32.95,"longitude":-97.339},
+        {"trade":"PLUMBING","location":"Fort Worth, TX","latitude":32.802,"longitude":-97.269},
+        {"trade":"PLUMBING","location":"Dallas, TX","latitude":32.645,"longitude":-97.076},
+        {"trade":"PLUMBING","location":"Fayetteville, NC","latitude":35.2,"longitude":-78.973},
+        {"trade":"PLUMBING","location":"Omaha, NE","latitude":41.239,"longitude":-96.18},
+        {"trade":"HVAC","location":"Katy, TX","latitude":29.796,"longitude":-95.223},
+        {"trade":"HVAC","location":"McKinney, TX","latitude":33.103,"longitude":-96.853},
+        {"trade":"HVAC","location":"Dallas, TX","latitude":32.769,"longitude":-96.978},
+        {"trade":"HVAC","location":"Huntington, TX","latitude":31.253,"longitude":-94.557},
+        {"trade":"HVAC","location":"Grapevine, TX","latitude":33.077,"longitude":-97.379},
+        {"trade":"HVAC","location":"Belleville, IL","latitude":38.45,"longitude":-89.801},
+        {"trade":"HVAC","location":"Manhattan, KS","latitude":39.081,"longitude":-96.726},
+        {"trade":"HVAC","location":"Greenville, TX","latitude":32.812,"longitude":-97.286},
+        {"trade":"HVAC","location":"Jacksonville, NC","latitude":34.741,"longitude":-77.606},
+        {"trade":"HVAC","location":"Grand Rapids, MI","latitude":42.891,"longitude":-85.405},
+        {"trade":"HVAC","location":"Lewisville, TX","latitude":32.986,"longitude":-96.793},
+        {"trade":"HVAC","location":"Houston, TX","latitude":29.633,"longitude":-95.242},
+        {"trade":"HVAC","location":"Dallas, TX","latitude":32.961,"longitude":-96.974},
+        {"trade":"HVAC","location":"Dallas, TX","latitude":32.814,"longitude":-96.664},
+        {"trade":"HVAC","location":"Katy, TX","latitude":29.591,"longitude":-96.102},
+        {"trade":"HVAC","location":"Southlake, TX","latitude":32.902,"longitude":-97.225},
+        {"trade":"HVAC","location":"Haslet, TX","latitude":32.728,"longitude":-96.778},
+        {"trade":"HVAC","location":"Kansas City, KS","latitude":39.094,"longitude":-94.386},
+        {"trade":"HVAC","location":"Euless, TX","latitude":32.976,"longitude":-97.216},
+        {"trade":"HVAC","location":"Rockwall, TX","latitude":32.957,"longitude":-96.806},
+        {"trade":"HVAC","location":"Savannah, GA","latitude":31.923,"longitude":-80.83},
+        {"trade":"HVAC","location":"Gastonia, NC","latitude":34.902,"longitude":-80.552},
+        {"trade":"ELECTRICAL","location":"Dallas, TX","latitude":32.824,"longitude":-96.736},
+        {"trade":"ELECTRICAL","location":"Point Pleasant, NJ","latitude":40.701,"longitude":-74.407},
+        {"trade":"ELECTRICAL","location":"Grand Prairie, TX","latitude":32.653,"longitude":-96.776},
+        {"trade":"ELECTRICAL","location":"Plano, TX","latitude":33.207,"longitude":-96.507},
+        {"trade":"ELECTRICAL","location":"Killeen, TX","latitude":31.206,"longitude":-97.88},
+        {"trade":"ELECTRICAL","location":"Arlington, TX","latitude":32.757,"longitude":-96.751},
+        {"trade":"ELECTRICAL","location":"El Paso, TX","latitude":31.62,"longitude":-106.509},
+        {"trade":"ELECTRICAL","location":"Sacramento, CA","latitude":38.978,"longitude":-121.764},
+        {"trade":"ELECTRICAL","location":"Dallas, TX","latitude":32.999,"longitude":-97.183},
+        {"trade":"ELECTRICAL","location":"Fort Worth, TX","latitude":32.746,"longitude":-97.063},
+        {"trade":"ELECTRICAL","location":"Kaufman, TX","latitude":32.791,"longitude":-96.458},
+        {"trade":"ELECTRICAL","location":"Killeen, TX","latitude":31.212,"longitude":-97.611},
+        {"trade":"ELECTRICAL","location":"Fort Worth, TX","latitude":32.77,"longitude":-97.406},
+        {"trade":"ELECTRICAL","location":"Rockwall, TX","latitude":32.962,"longitude":-96.205},
+        {"trade":"ELECTRICAL","location":"Frisco, TX","latitude":32.857,"longitude":-96.942},
+        {"trade":"ELECTRICAL","location":"Huntsville, AL","latitude":34.96,"longitude":-86.316},
+        {"trade":"ELECTRICAL","location":"Dallas, TX","latitude":32.81,"longitude":-97.157},
+        {"trade":"ELECTRICAL","location":"Colonial Heights, VA","latitude":37.036,"longitude":-77.397},
+        {"trade":"ELECTRICAL","location":"Jacksonville, FL","latitude":30.169,"longitude":-81.93},
+        {"trade":"ELECTRICAL","location":"Dallas, TX","latitude":33.072,"longitude":-96.936},
+        {"trade":"FACILITIES","location":"Dallas, TX","latitude":32.657,"longitude":-96.831},
+        {"trade":"FACILITIES","location":"Dallas, TX","latitude":32.917,"longitude":-97.027},
+        {"trade":"FACILITIES","location":"Dallas, TX","latitude":32.65,"longitude":-97.042},
+        {"trade":"FACILITIES","location":"Dallas, TX","latitude":32.765,"longitude":-96.824},
+        {"trade":"FACILITIES","location":"Dallas, TX","latitude":32.711,"longitude":-97.003},
+        {"trade":"FACILITIES","location":"Copperas Cove, TX","latitude":30.97,"longitude":-98.396},
+        {"trade":"FACILITIES","location":"Sherman, TX","latitude":33.243,"longitude":-96.919},
+        {"trade":"FACILITIES","location":"DeSoto, TX","latitude":32.423,"longitude":-96.865},
+        {"trade":"HVAC","location":"Mesquite, TX","latitude":32.653,"longitude":-96.716},
+        {"trade":"HVAC","location":"Fort Worth, TX","latitude":32.824,"longitude":-97.208},
+        {"trade":"HVAC","location":"Dallas, TX","latitude":32.713,"longitude":-96.605},
+        {"trade":"HVAC","location":"Beaumont, TX","latitude":29.928,"longitude":-94.358},
+        {"trade":"HVAC","location":"Rockwall, TX","latitude":32.799,"longitude":-96.226},
+        {"trade":"HVAC","location":"Newark, NJ","latitude":40.762,"longitude":-74.076},
+        {"trade":"HVAC","location":"Lewisville, TX","latitude":32.852,"longitude":-96.967},
+        {"trade":"HVAC","location":"Houston, TX","latitude":29.904,"longitude":-95.365},
+        {"trade":"HVAC","location":"El Paso, TX","latitude":31.855,"longitude":-106.543},
+        {"trade":"HVAC","location":"Raleigh, NC","latitude":35.698,"longitude":-78.444},
+        {"trade":"ELECTRICAL","location":"Dallas, TX","latitude":32.886,"longitude":-97.085},
+        {"trade":"ELECTRICAL","location":"Dallas, TX","latitude":32.716,"longitude":-97.031},
+        {"trade":"ELECTRICAL","location":"Dallas, TX","latitude":32.658,"longitude":-96.882},
+        {"trade":"ELECTRICAL","location":"Seattle, WA","latitude":47.518,"longitude":-122.082},
+        {"trade":"ELECTRICAL","location":"Las Cruces, NM","latitude":32.466,"longitude":-106.705},
+        {"trade":"ELECTRICAL","location":"Minneapolis, MN","latitude":44.978,"longitude":-93.265},
+        {"trade":"ELECTRICAL","location":"Dallas, TX","latitude":32.934,"longitude":-97.048},
+        {"trade":"ELECTRICAL","location":"East Tawas, MI","latitude":44.456,"longitude":-83.885},
+        {"trade":"ELECTRICAL","location":"Kansas City, MO","latitude":39.147,"longitude":-94.581},
+        {"trade":"ELECTRICAL","location":"Frisco, TX","latitude":33.043,"longitude":-96.937},
+        {"trade":"ELECTRICAL","location":"Plano, TX","latitude":32.962,"longitude":-96.889},
+        {"trade":"ELECTRICAL","location":"Temple, TX","latitude":31.295,"longitude":-97.75},
+        {"trade":"ELECTRICAL","location":"Riverside, CA","latitude":33.789,"longitude":-117.594},
+        {"trade":"PLUMBING","location":"Greenville, TX","latitude":32.986,"longitude":-96.426},
+        {"trade":"PLUMBING","location":"Mesquite, TX","latitude":32.804,"longitude":-96.343},
+        {"trade":"HVAC","location":"Germantown, MD","latitude":38.875,"longitude":-76.978},
+        {"trade":"HVAC","location":"San Diego, CA","latitude":32.624,"longitude":-116.945},
+        {"trade":"HVAC","location":"Killeen, TX","latitude":31.153,"longitude":-97.437},
+        {"trade":"HVAC","location":"Temple, TX","latitude":31.097,"longitude":-97.09},
+        {"trade":"HVAC","location":"Kansas City, MO","latitude":38.968,"longitude":-94.341},
+        {"trade":"HVAC","location":"Frisco, TX","latitude":33.035,"longitude":-96.93},
+        {"trade":"HVAC","location":"Dallas, TX","latitude":32.929,"longitude":-97.154},
+        {"trade":"HVAC","location":"San Antonio, TX","latitude":29.23,"longitude":-98.75},
+        {"trade":"HVAC","location":"El Paso, TX","latitude":31.573,"longitude":-106.495},
+        {"trade":"HVAC","location":"Dallas, TX","latitude":32.911,"longitude":-96.743},
+        {"trade":"HVAC","location":"Fort Lauderdale, FL","latitude":25.833,"longitude":-80.416},
+        {"trade":"HVAC","location":"Pearland, TX","latitude":29.813,"longitude":-95.406},
+        {"trade":"HVAC","location":"Dallas, TX","latitude":32.74,"longitude":-97.069},
+        {"trade":"HVAC","location":"Killeen, TX","latitude":31.255,"longitude":-97.628},
+        {"trade":"HVAC","location":"Fort Lauderdale, FL","latitude":26.467,"longitude":-79.973},
+        {"trade":"HVAC","location":"Bakersfield, CA","latitude":36.812,"longitude":-119.102},
+        {"trade":"HVAC","location":"San Francisco, CA","latitude":37.599,"longitude":-122.615},
+        {"trade":"HVAC","location":"Dallas, TX","latitude":32.85,"longitude":-97.301},
+        {"trade":"HVAC","location":"Dublin, GA","latitude":32.462,"longitude":-82.881},
+        {"trade":"HVAC","location":"Dallas, TX","latitude":32.837,"longitude":-96.703},
+        {"trade":"HVAC","location":"San Antonio, TX", "latitude":29.529,"longitude":-98.267},
+        {"trade":"HVAC","location":"Williamsport, PA","latitude":41.268,"longitude":-76.773},
+        {"trade":"HVAC","location":"Des Moines, IA","latitude":41.397,"longitude":-93.718},
+        {"trade":"ELECTRICAL","location":"Waxahachie, TX","latitude":32.848,"longitude":-96.885},
+        {"trade":"ELECTRICAL","location":"Garland, TX","latitude":32.952,"longitude":-96.341},
+        {"trade":"ELECTRICAL","location":"Kansas City, MO","latitude":39.079,"longitude":-94.528},
+        {"trade":"ELECTRICAL","location":"Killeen, TX","latitude":31.139,"longitude":-97.756},
+        {"trade":"ELECTRICAL","location":"Denton, TX","latitude":33.055,"longitude":-97.194},
+        {"trade":"ELECTRICAL","location":"Dallas, TX","latitude":33.012,"longitude":-96.893},
+        {"trade":"ELECTRICAL","location":"Kansas City, MO","latitude":38.751,"longitude":-94.35},
+        {"trade":"ELECTRICAL","location":"Fayetteville, NC","latitude":35.92,"longitude":-78.705},
+        {"trade":"ELECTRICAL","location":"White Bear Lake, MN","latitude":45.169,"longitude":-93.403},
+        {"trade":"ELECTRICAL","location":"Mesa, AZ","latitude":33.38,"longitude":-112.269},
+        {"trade":"ELECTRICAL","location":"McAllen, TX","latitude":26.302,"longitude":-98.032},
+        {"trade":"PLUMBING","location":"Dallas, TX","latitude":33.003,"longitude":-97.306},
+        {"trade":"PLUMBING","location":"Dallas, TX","latitude":33.007,"longitude":-96.782},
+        {"trade":"PLUMBING","location":"Albuquerque, NM","latitude":34.563,"longitude":-106.893},
+        {"trade":"HVAC","location":"Dallas, TX","latitude":32.792,"longitude":-96.911},
+        {"trade":"HVAC","location":"Dallas, TX","latitude":32.929,"longitude":-97.334},
+        {"trade":"HVAC","location":"Biloxi, MS","latitude":30.555,"longitude":-88.889},
+        {"trade":"HVAC","location":"Killeen, TX","latitude":31.342,"longitude":-97.662},
+        {"trade":"HVAC","location":"Killeen, TX","latitude":30.948,"longitude":-97.949},
+        {"trade":"ELECTRICAL","location":"Dallas, TX","latitude":32.843,"longitude":-96.676},
+        {"trade":"ELECTRICAL","location":"Fort Wayne, IN","latitude":40.337,"longitude":-85.771},
+        {"trade":"ELECTRICAL","location":"San Diego, CA","latitude":32.599,"longitude":-117.292},
+        {"trade":"HVAC","location":"Tulsa, OK","latitude":36.247,"longitude":-95.987},
+        {"trade":"HVAC","location":"Dallas, TX","latitude":32.696,"longitude":-97.005},
+        {"trade":"HVAC","location":"Jacksonville, NC","latitude":34.877,"longitude":-76.997},
+        {"trade":"HVAC","location":"Dallas, TX","latitude":32.701,"longitude":-97.005},
+        {"trade":"HVAC","location":"Dallas, TX","latitude":33.056,"longitude":-97.018},
+        {"trade":"HVAC","location":"Dallas, TX","latitude":32.848,"longitude":-97.227},
+        {"trade":"HVAC","location":"Stafford, KS","latitude":38.06,"longitude":-98.518},
+        {"trade":"HVAC","location":"San Antonio, TX","latitude":29.395,"longitude":-98.447},
+        {"trade":"HVAC","location":"Lawton, OK","latitude":35.015,"longitude":-97.77},
+        {"trade":"HVAC","location":"Killeen, TX","latitude":31.255,"longitude":-97.965},
+        {"trade":"HVAC","location":"Dallas, TX","latitude":32.781,"longitude":-96.837},
+        {"trade":"HVAC","location":"Temple, TX","latitude":31.445,"longitude":-97.214},
+        {"trade":"HVAC","location":"Plano, TX","latitude":32.934,"longitude":-96.785},
+        {"trade":"ELECTRICAL","location":"Dallas, TX","latitude":33.053,"longitude":-97.089},
+        {"trade":"ELECTRICAL","location":"Richmond, TX","latitude":29.757,"longitude":-96.027},
+        {"trade":"ELECTRICAL","location":"Allentown, PA","latitude":40.523,"longitude":-75.359},
+        {"trade":"ELECTRICAL","location":"Crandall, TX","latitude":32.446,"longitude":-96.368},
+        {"trade":"ELECTRICAL","location":"Dallas, TX","latitude":32.704,"longitude":-97.149},
+        {"trade":"ELECTRICAL","location":"Greenville, TX","latitude":32.857,"longitude":-96.299},
+        {"trade":"ELECTRICAL","location":"Dallas, TX","latitude":32.773,"longitude":-97.095},
+        {"trade":"ELECTRICAL","location":"San Antonio, TX","latitude":29.413,"longitude":-98.757},
+        {"trade":"ELECTRICAL","location":"Dallas, TX","latitude":32.95,"longitude":-97.23},
+        {"trade":"ELECTRICAL","location":"Forney, TX","latitude":32.588,"longitude":-96.191},
+        {"trade":"ELECTRICAL","location":"Gainesville, FL","latitude":29.393,"longitude":-82.057},
+        {"trade":"HVAC","location":"Dallas, TX","latitude":32.788,"longitude":-97.081},
+        {"trade":"HVAC","location":"McKinney, TX","latitude":32.891,"longitude":-96.865},
+        {"trade":"HVAC","location":"Gilbert, AZ","latitude":33.985,"longitude":-112.328},
+        {"trade":"HVAC","location":"Colorado Springs, CO","latitude":39.041,"longitude":-105.247},
+        {"trade":"HVAC","location":"Dallas, TX","latitude":33.006,"longitude":-96.926},
+        {"trade":"HVAC","location":"Houston, TX","latitude":29.837,"longitude":-95.023},
+        {"trade":"HVAC","location":"McKinney, TX","latitude":33.041,"longitude":-96.817},
+        {"trade":"HVAC","location":"Austin, TX","latitude":30.959,"longitude":-97.885},
+        {"trade":"HVAC","location":"McGregor, TX","latitude":31.455,"longitude":-97.063},
+        {"trade":"HVAC","location":"Houston, TX","latitude":29.569,"longitude":-95.177},
+        {"trade":"HVAC","location":"Temple, TX","latitude":31.25,"longitude":-97.497},
+        {"trade":"ELECTRICAL","location":"Barrington, IL","latitude":42.407,"longitude":-88.051},
+        {"trade":"ELECTRICAL","location":"Buena Vista, CO","latitude":38.951,"longitude":-106.04},
+        {"trade":"ELECTRICAL","location":"San Angelo, TX","latitude":31.458,"longitude":-100.201},
+        {"trade":"ELECTRICAL","location":"New Braunfels, TX","latitude":29.685,"longitude":-98.524},
+        {"trade":"ELECTRICAL","location":"Dallas, TX","latitude":32.866,"longitude":-96.785},
+        {"trade":"ELECTRICAL","location":"Temple, TX","latitude":31.688,"longitude":-97.326},
+        {"trade":"ELECTRICAL","location":"Copperas Cove, TX","latitude":31.31,"longitude":-97.58},
+        {"trade":"ELECTRICAL","location":"Dallas, TX","latitude":32.725,"longitude":-97.237},
+        {"trade":"ELECTRICAL","location":"Houston, TX","latitude":29.689,"longitude":-95.223},
+        {"trade":"ELECTRICAL","location":"Johnstown, NY","latitude":42.718,"longitude":-74.552},
+        {"trade":"ELECTRICAL","location":"Dallas, TX","latitude":32.854,"longitude":-96.585},
+        {"trade":"ELECTRICAL","location":"New Braunfels, TX","latitude":29.906,"longitude":-98.214},
+        {"trade":"HVAC","location":"Dallas, TX","latitude":32.8,"longitude":-97.019},
+        {"trade":"HVAC","location":"Mount Vernon, KY","latitude":37.711,"longitude":-84.269},
+        {"trade":"HVAC","location":"Dallas, TX","latitude":32.958,"longitude":-97.255},
+        {"trade":"HVAC","location":"San Antonio, TX","latitude":29.511,"longitude":-98.423},
+        {"trade":"HVAC","location":"Dallas, TX","latitude":32.993,"longitude":-97.134},
+        {"trade":"HVAC","location":"McAllen, TX","latitude":26.225,"longitude":-98.422},
+        {"trade":"HVAC","location":"Boston, MA","latitude":42.191,"longitude":-71.049},
+        {"trade":"HVAC","location":"Pensacola, FL","latitude":30.695,"longitude":-86.825},
+        {"trade":"HVAC","location":"Goldthwaite, TX","latitude":31.477,"longitude":-98.798},
+        {"trade":"HVAC","location":"Dallas, TX","latitude":32.855,"longitude":-97.086},
+        {"trade":"HVAC","location":"Dallas, TX","latitude":33.014,"longitude":-96.822},
+        {"trade":"HVAC","location":"Katy, TX","latitude":29.666,"longitude":-95.701},
+        {"trade":"HVAC","location":"McKinney, TX","latitude":32.954,"longitude":-97.167},
+        {"trade":"HVAC","location":"Dallas, TX","latitude":32.72,"longitude":-96.854},
+        {"trade":"HVAC","location":"Dallas, TX","latitude":32.775,"longitude":-97.074},
+        {"trade":"HVAC","location":"El Paso, TX","latitude":31.749,"longitude":-106.312},
+        {"trade":"HVAC","location":"Killeen, TX","latitude":31.15,"longitude":-97.592},
+        {"trade":"HVAC","location":"Coppell, TX","latitude":33.073,"longitude":-96.949},
+        {"trade":"HVAC","location":"San Antonio, TX","latitude":29.434,"longitude":-98.81},
+        {"trade":"HVAC","location":"Dallas, TX","latitude":32.844,"longitude":-97.107},
+        {"trade":"HVAC","location":"Round Rock, TX","latitude":31.263,"longitude":-98.867},
+        {"trade":"HVAC","location":"Elizabeth, NJ","latitude":40.79,"longitude":-73.91},
+        {"trade":"HVAC","location":"Dallas, TX","latitude":32.862,"longitude":-97.214},
+        {"trade":"ELECTRICAL","location":"Ghent, KY","latitude":37.405,"longitude":-86.174},
+        {"trade":"ELECTRICAL","location":"Dallas, TX","latitude":32.901,"longitude":-96.559},
+        {"trade":"ELECTRICAL","location":"Sulphur Springs, TX","latitude":33.499,"longitude":-95.86},
+        {"trade":"ELECTRICAL","location":"Dallas, TX","latitude":32.744,"longitude":-97.221},
+        {"trade":"ELECTRICAL","location":"Plano, TX","latitude":33.073,"longitude":-96.962},
+        {"trade":"ELECTRICAL","location":"Austin, TX","latitude":31.524,"longitude":-96.914},
+        {"trade":"ELECTRICAL","location":"Columbus, OH","latitude":40.154,"longitude":-82.791},
+        {"trade":"ELECTRICAL","location":"Dallas, TX","latitude":32.905,"longitude":-97.131},
+        {"trade":"ELECTRICAL","location":"Austin, TX","latitude":30.258,"longitude":-97.607},
+        {"trade":"HVAC","location":"Killeen, TX","latitude":30.979,"longitude":-97.478},
+        {"trade":"HVAC","location":"Arlington, TX","latitude":32.989,"longitude":-97.145},
+        {"trade":"HVAC","location":"Dallas, TX","latitude":33.034,"longitude":-97.196},
+        {"trade":"HVAC","location":"Dallas, TX","latitude":32.734,"longitude":-97.153},
+        {"trade":"HVAC","location":"Carrollton, TX","latitude":32.831,"longitude":-97.3},
+        {"trade":"HVAC","location":"Dallas, TX","latitude":33.026,"longitude":-96.803},
+        {"trade":"HVAC","location":"Dallas, TX","latitude":33.09,"longitude":-97.179},
+        {"trade":"HVAC","location":"Dallas, TX","latitude":32.94,"longitude":-97.067},
+        {"trade":"HVAC","location":"Waco, TX","latitude":31.099,"longitude":-97.663},
+        {"trade":"HVAC","location":"Council Bluffs, IA","latitude":41.2,"longitude":-95.666},
+        {"trade":"HVAC","location":"Lewisville, TX","latitude":32.907,"longitude":-96.816},
+        {"trade":"HVAC","location":"Dallas, TX","latitude":32.97,"longitude":-96.77},
+        {"trade":"HVAC","location":"Dallas, TX","latitude":32.71,"longitude":-97.132},
+        {"trade":"HVAC","location":"Fort Worth, TX","latitude":32.615,"longitude":-97.48},
+        {"trade":"ELECTRICAL","location":"Dallas, TX","latitude":32.882,"longitude":-97.03},
+        {"trade":"ELECTRICAL","location":"Dallas, TX","latitude":32.926,"longitude":-96.764},
+        {"trade":"ELECTRICAL","location":"Weatherford, TX","latitude":32.836,"longitude":-97.593},
+        {"trade":"ELECTRICAL","location":"Dallas, TX","latitude":32.711,"longitude":-96.811},
+        {"trade":"ELECTRICAL","location":"Carrollton, TX","latitude":32.816,"longitude":-97.006},
+        {"trade":"ELECTRICAL","location":"Dallas, TX","latitude":32.757,"longitude":-96.914},
+        {"trade":"HVAC","location":"Houston, TX","latitude":30.076,"longitude":-95.539},
+        {"trade":"HVAC","location":"Houston, TX","latitude":30.176,"longitude":-95.456},
+        {"trade":"HVAC","location":"Dallas, TX","latitude":32.795,"longitude":-96.842},
+        {"trade":"HVAC","location":"Dallas, TX","latitude":33.067,"longitude":-97.321},
+        {"trade":"HVAC","location":"Richardson, TX","latitude":33.012,"longitude":-96.871},
+        {"trade":"HVAC","location":"Waco, TX","latitude":31.671,"longitude":-97.134},
+        {"trade":"HVAC","location":"Frisco, TX","latitude":32.749,"longitude":-97.124},
+        {"trade":"HVAC","location":"Dallas, TX","latitude":32.965,"longitude":-96.938},
+        {"trade":"HVAC","location":"Waco, TX","latitude":31.387,"longitude":-97.433},
+        {"trade":"HVAC","location":"Dallas, TX","latitude":32.736,"longitude":-96.87},
+        {"trade":"HVAC","location":"Lewisville, TX","latitude":32.7,"longitude":-97.29},
+        {"trade":"ELECTRICAL","location":"Woodstock, GA","latitude":33.92,"longitude":-84.578},
+        {"trade":"ELECTRICAL","location":"Dallas, TX","latitude":32.731,"longitude":-96.858},
+        {"trade":"ELECTRICAL","location":"Dallas, TX","latitude":33.083,"longitude":-96.851},
+        {"trade":"ELECTRICAL","location":"Dallas, TX","latitude":32.778,"longitude":-97.132},
+        {"trade":"ELECTRICAL","location":"Gibbon, NE","latitude":41.084,"longitude":-99.2},
+        {"trade":"ELECTRICAL","location":"Alvord, TX","latitude":32.808,"longitude":-97.205},
+        {"trade":"ELECTRICAL","location":"Plano, TX","latitude":32.891,"longitude":-96.578},
+        {"trade":"ELECTRICAL","location":"Dallas, TX","latitude":32.944,"longitude":-96.76},
+        {"trade":"ELECTRICAL","location":"Dallas, TX","latitude":33.032,"longitude":-97.057},
+        {"trade":"HVAC","location":"Houston, TX","latitude":29.985,"longitude":-95.239},
+        {"trade":"HVAC","location":"Temple, TX","latitude":31.226,"longitude":-97.568},
+        {"trade":"HVAC","location":"Sumter, SC","latitude":34.128,"longitude":-80.995},
+        {"trade":"HVAC","location":"Dallas, TX","latitude":33.047,"longitude":-96.886},
+        {"trade":"HVAC","location":"Irving, TX","latitude":32.828,"longitude":-97.081},
+        {"trade":"HVAC","location":"Chicago, IL","latitude":41.935,"longitude":-87.837},
+        {"trade":"HVAC","location":"Richardson, TX","latitude":32.581,"longitude":-96.527},
+        {"trade":"HVAC","location":"Dubuque, IA","latitude":42.758,"longitude":-90.798},
+        {"trade":"HVAC","location":"Dallas, TX","latitude":32.761,"longitude":-97.026},
+        {"trade":"ELECTRICAL","location":"Chattanooga, TN","latitude":36.024,"longitude":-84.0},
+        {"trade":"ELECTRICAL","location":"Augusta, GA","latitude":33.319,"longitude":-81.742},
+        {"trade":"ELECTRICAL","location":"McKinney, TX","latitude":33.266,"longitude":-96.937},
+        {"trade":"ELECTRICAL","location":"Dallas, TX","latitude":32.779,"longitude":-96.949},
+        {"trade":"ELECTRICAL","location":"Carrollton, TX","latitude":33.278,"longitude":-96.742},
+        {"trade":"ELECTRICAL","location":"Dallas, TX","latitude":32.784,"longitude":-96.78},
+        {"trade":"ELECTRICAL","location":"Dallas, TX","latitude":32.821,"longitude":-97.04},
+        {"trade":"ELECTRICAL","location":"Richardson, TX","latitude":32.638,"longitude":-96.382},
+        {"trade":"ELECTRICAL","location":"Huntsville, AL","latitude":34.341,"longitude":-86.627},
+        {"trade":"ELECTRICAL","location":"Dallas, TX","latitude":32.713,"longitude":-96.803}];
+    const HEX={HVAC:'#C8390A',ELECTRICAL:'#0B6E5A',PLUMBING:'#1D5FA8',FACILITIES:'#7A4D0F'};
+    const LBL={HVAC:'HVAC',ELECTRICAL:'Electrical',PLUMBING:'Plumbing',FACILITIES:'Facilities'};
+    let DATA=[],aF='all',svgEl,proj,zB,usData,currentTransform,rendered=[],activeRecordIndex=null,tooltipPinned=false,resizeTimer,resizeObserver,initStarted=false;
+
+    function announceStatus(message){
+        const status=document.getElementById('map-status');
+        status.textContent='';
+        requestAnimationFrame(()=>{status.textContent=message;});
+    }
+
+    function prepareData(){
+        DATA=DOTS.filter(d=>HEX[d.trade]&&Number.isFinite(d.latitude)&&Number.isFinite(d.longitude))
+            .map((d,index)=>({...d,index}));
+    }
+
+    function filt(){return DATA.filter(s=>aF==='all'||s.trade===aF);}
+
+    function setFilter(f,el){
+        aF=f; tooltipPinned=false; hideTooltip(true);
+        document.querySelectorAll('.chip').forEach(c=>{
+            c.className='chip'; c.setAttribute('aria-pressed',String(c===el));
+        });
+        el.classList.add(f==='all'?'on-all':'on-'+f);
+        renderDots();
+    }
+
+    function renderDots(){
+        if(!svgEl||!proj)return;
+        const g=svgEl.select('#dots-g'); g.selectAll('*').remove();
+        rendered=filt().map(point=>{
+            const xy=proj([point.longitude,point.latitude]);
+            return xy?{point,x:xy[0],y:xy[1]}:null;
+        }).filter(Boolean);
+        rendered.forEach((item,i)=>{
+            const p=item.point;
+            const node=g.append('g').attr('class','marker').classed('active',p.index===activeRecordIndex)
+                .attr('aria-hidden','true').attr('data-record-index',p.index)
+                .attr('transform',`translate(${item.x},${item.y})`).attr('opacity',.9);
+            node.append('circle').attr('class','active-ring').attr('r',9);
+            node.append('circle').attr('r',5).attr('fill',HEX[p.trade])
+                .attr('stroke','#fff').attr('stroke-width',1.5);
+            node.on('pointermove',ev=>showTooltip(p,ev.clientX,ev.clientY))
+                .on('pointerleave',ev=>{if(ev.pointerType!=='touch')hideTooltip();})
+                .on('click',ev=>{ev.stopPropagation();tooltipPinned=true;setActive(item,true);});
+        });
+        reconcileSelection(false);
+    }
+
+    function showTooltip(point,clientX,clientY){
+        const tt=document.getElementById('tt'),wrap=document.getElementById('map-wrap'),r=wrap.getBoundingClientRect();
+        tt.replaceChildren();
+        const loc=document.createElement('div');loc.className='tt-loc';loc.textContent=point.location;tt.appendChild(loc);
+        const tag=document.createElement('span');tag.className=`tt-badge b-${point.trade}`;tag.textContent=LBL[point.trade];tt.appendChild(tag);
+        let tx=clientX-r.left+14,ty=clientY-r.top-14;
+        if(tx+230>r.width)tx=Math.max(8,tx-244);if(ty+100>r.height)ty=Math.max(8,ty-90);
+        tt.style.left=`${tx}px`;tt.style.top=`${ty}px`;tt.classList.add('show');
+    }
+
+    function hideTooltip(force=false){
+        if(tooltipPinned&&!force)return;
+        document.getElementById('tt').classList.remove('show');
+    }
+
+    function screenPosition(item){
+        return {x:currentTransform.applyX(item.x),y:currentTransform.applyY(item.y)};
+    }
+
+    function visibleItems(){
+        const wrap=document.getElementById('map-wrap'),W=wrap.clientWidth,H=wrap.clientHeight;
+        return rendered.filter(item=>{const p=screenPosition(item);return p.x>=0&&p.x<=W&&p.y>=0&&p.y<=H;});
+    }
+
+    function closestToCenter(items){
+        const wrap=document.getElementById('map-wrap'),cx=wrap.clientWidth/2,cy=wrap.clientHeight/2;
+        return items.reduce((best,item)=>{
+            const p=screenPosition(item),score=(p.x-cx)**2+(p.y-cy)**2;
+            return !best||score<best.score?{item,score}:best;
+        },null)?.item||null;
+    }
+
+    function setActive(item,announce=false){
+        if(!item)return;
+        activeRecordIndex=item.point.index;
+        const g=svgEl.select('#dots-g');
+        g.selectAll('.marker').classed('active',false);
+        const selected=g.select(`[data-record-index="${activeRecordIndex}"]`).classed('active',true);
+        selected.raise();
+        if(announce){
+            const r=document.getElementById('map-wrap').getBoundingClientRect(),p=screenPosition(item);
+            showTooltip(item.point,r.left+p.x,r.top+p.y);
+            announceStatus(`${item.point.location}, ${LBL[item.point.trade]}`);
+        }
+    }
+
+    function clearActive(){
+        activeRecordIndex=null;
+        if(svgEl)svgEl.select('#dots-g').selectAll('.marker').classed('active',false);
+    }
+
+    function reconcileSelection(announce=false){
+        const visible=visibleItems();
+        if(!visible.length){clearActive();return;}
+        const current=visible.find(item=>item.point.index===activeRecordIndex);
+        if(current)setActive(current,announce);
+        else clearActive();
+    }
+
+    function showMapError(message){
+        announceStatus(message);
+        if(!svgEl)return;
+        svgEl.selectAll('.map-error').remove();
+        const wrap=document.getElementById('map-wrap');
+        svgEl.append('text').attr('class','map-error').attr('x',(wrap.clientWidth||960)/2)
+            .attr('y',(wrap.clientHeight||580)/2).attr('text-anchor','middle')
+            .attr('fill','#9f2d08').attr('font-size','14').text(message);
+    }
+
+    function handleMapKeys(event){
+        if(event.key==='Escape'){
+            tooltipPinned=false;hideTooltip(true);return;
+        }
+        const arrows=['ArrowRight','ArrowDown','ArrowLeft','ArrowUp'];
+        const isArrow=arrows.includes(event.key);
+        const isActivation=event.key==='Enter'||event.key===' ';
+        if(!isArrow&&!isActivation)return;
+        const visible=visibleItems();if(!visible.length)return;
+        let current=visible.find(item=>item.point.index===activeRecordIndex);
+        if(!current){
+            current=closestToCenter(visible);
+            if(isArrow){event.preventDefault();setActive(current,true);return;}
+        }
+        if(isArrow){
+            event.preventDefault();
+            const origin=screenPosition(current),horizontal=event.key==='ArrowRight'||event.key==='ArrowLeft';
+            const positive=event.key==='ArrowRight'||event.key==='ArrowDown';
+            const candidates=visible.filter(item=>item!==current).map(item=>{
+                const p=screenPosition(item),dx=p.x-origin.x,dy=p.y-origin.y;
+                const primary=horizontal?dx:dy,perpendicular=Math.abs(horizontal?dy:dx);
+                if(positive?primary<=1:primary>=-1)return null;
+                return {item,score:Math.abs(primary)+perpendicular*2.5};
+            }).filter(Boolean).sort((a,b)=>a.score-b.score);
+            if(candidates.length)setActive(candidates[0].item,true);
+        }else if(event.key==='Enter'||event.key===' '){
+            event.preventDefault();tooltipPinned=true;setActive(current,true);
+        }
+    }
+
+    function zIn(){svgEl.transition().call(zB.scaleBy,1.45);}
+    function zOut(){svgEl.transition().call(zB.scaleBy,.70);}
+    function zReset(){svgEl.transition().duration(450).call(zB.transform,d3.zoomIdentity);}
+
+    function layout(){
+        const wrap=document.getElementById('map-wrap'),W=wrap.clientWidth||960,H=wrap.clientHeight||580;
+        proj=d3.geoAlbersUsa();
+        if(usData)proj.fitExtent([[24,24],[W-24,H-24]],{type:'FeatureCollection',features:usData});
+        else proj.scale(1150*Math.min(W/960,H/580)).translate([W/2,H/2]);
+        svgEl.attr('viewBox',`0 0 ${W} ${H}`);
+        if(usData)svgEl.select('#states-g').selectAll('path').attr('d',d3.geoPath().projection(proj));
+        renderDots();
+    }
+
+    async function init(){
+        if(initStarted)return;
+        initStarted=true;
+        if(typeof d3==='undefined'||typeof topojson==='undefined'){
+            const error=document.createElementNS('http://www.w3.org/2000/svg','text');
+            error.setAttribute('x','50%');error.setAttribute('y','50%');error.setAttribute('text-anchor','middle');
+            error.setAttribute('fill','#9f2d08');error.setAttribute('font-size','14');error.setAttribute('role','alert');
+            error.textContent='Map unavailable — required scripts did not load';
+            document.getElementById('map-svg').appendChild(error);
+            announceStatus(error.textContent);return;
+        }
+        prepareData();svgEl=d3.select('#map-svg');currentTransform=d3.zoomIdentity;
+        const sg=svgEl.append('g').attr('id','states-g');svgEl.append('g').attr('id','dots-g');
+        zB=d3.zoom().scaleExtent([.7,10]).on('zoom',e=>{
+            currentTransform=e.transform;sg.attr('transform',e.transform);svgEl.select('#dots-g').attr('transform',e.transform);
+            tooltipPinned=false;hideTooltip(true);
+        }).on('end',()=>reconcileSelection(false));
+        svgEl.call(zB).on('dblclick.zoom',null);
+        const mapNode=document.getElementById('map-svg');
+        mapNode.addEventListener('keydown',handleMapKeys);
+        document.getElementById('map-wrap').addEventListener('click',()=>{tooltipPinned=false;hideTooltip(true);});
+        const scheduleLayout=()=>{clearTimeout(resizeTimer);resizeTimer=setTimeout(layout,120);};
+        if('ResizeObserver' in window){
+            resizeObserver=new ResizeObserver(scheduleLayout);
+            resizeObserver.observe(document.getElementById('map-wrap'));
+        }else window.addEventListener('resize',scheduleLayout);
+        layout();
+        try{
+            const us=await d3.json('https://cdn.jsdelivr.net/npm/us-atlas@3/states-10m.json');
+            usData=topojson.feature(us,us.objects.states).features;
+            sg.selectAll('path').data(usData).enter().append('path').attr('class','state-path');
+            layout();
+            announceStatus('Map loaded. Focus the map and use the arrow keys to explore visible markers.');
+        }catch(e){showMapError('Map outline unavailable — check your connection');}
+    }
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js" integrity="sha384-CjloA8y00+1SDAUkjs099PVfnY2KmDC2BZnws9kh8D/lX1s46w6EPhpXdqMfjK6i" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/topojson/3.0.2/topojson.min.js" integrity="sha384-9dCJK6nh7skY14HrcvlLYlFga9/MehJjL9ONWRflmiXNRuf8p2jiF4Y5PR881PTq" crossorigin="anonymous"></script>
+<script>init()</script>
+</body>
+</html>
